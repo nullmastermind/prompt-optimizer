@@ -1,6 +1,3 @@
-# dist
-packages/extension/*.zip
-
 # Logs
 logs
 *.log
@@ -34,5 +31,3 @@ dist-ssr
 .env.production.local
 
 .vscode
-.vercel
-*.code-workspace
