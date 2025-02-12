@@ -1,12 +1,8 @@
 {
-  "buildCommand": "if [[ $(pwd) == */packages/extension ]]; then cd ../.. && pnpm build && mkdir -p packages/extension/packages/web && cp -r packages/web/dist packages/extension/packages/web/dist; else pnpm build; fi",
-  "outputDirectory": "packages/web/dist",
-  "installCommand": "pwd && if [[ $(pwd) == */packages/extension ]]; then cd ../.. && pnpm install && pnpm i @vercel/analytics -w; else pnpm install && pnpm i @vercel/analytics -w; fi",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
@@ -16,11 +12,11 @@
     "silent": true
   },
   "env": {
-    "VITE_VERCEL_DEPLOYMENT": "true"
-  },
-  "build": {
-    "env": {
-      "VITE_VERCEL_DEPLOYMENT": "true"
+    "VITE_GEMINI_API_KEY": {
+      "description": "Gemini API密钥"
+    },
+    "VITE_DEEPSEEK_API_KEY": {
+      "description": "DeepSeek API密钥"
     }
   }
 } 
