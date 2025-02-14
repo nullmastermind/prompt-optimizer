@@ -12,20 +12,12 @@ export interface TemplateMetadata {
 }
 
 /**
- * 消息模板定义
- */
-export interface MessageTemplate {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-/**
  * 提示词定义
  */
 export interface Template {
   id: string;              // 提示词唯一标识
   name: string;            // 提示词名称
-  content: string | MessageTemplate[];         // 提示词内容 - 支持字符串或消息数组
+  content: string;         // 提示词内容
   metadata: TemplateMetadata;
   isBuiltin?: boolean;     // 是否为内置提示词
 }
@@ -47,44 +39,15 @@ export interface TemplateManagerConfig {
  * 提示词管理器接口
  */
 export interface ITemplateManager {
-  /** 获取指定ID的模板 */
-  getTemplate(templateId: string): Template; // Stays synchronous
-
-  /** 保存模板 */
-  saveTemplate(template: Template): Promise<void>; // Async
-
-  /** 删除模板 */
-  deleteTemplate(templateId: string): Promise<void>; // Async
-
-  /** 列出所有模板 */
-  listTemplates(): Template[]; // Stays synchronous
-
-  /** 导出模板 */
-  exportTemplate(templateId: string): string; // Stays synchronous
-
-  /** 导入模板 */
-  importTemplate(templateJson: string): Promise<void>; // Async
-
-  /** 清除缓存 */
-  clearCache(templateId?: string): void; // Synchronous
-  
-  /** 按类型列出模板 */
-  listTemplatesByType(type: 'optimize' | 'iterate'): Template[];
-  
-  /** 
-   * 根据类型获取模板列表（已废弃）
-   * @deprecated 使用 listTemplatesByType 替代
-   */
-  getTemplatesByType(type: 'optimize' | 'iterate'): Template[];
+  init(): Promise<void>;
+  getTemplate(templateId: string): Promise<Template>;
+  saveTemplate(template: Template): Promise<void>;
+  deleteTemplate(templateId: string): Promise<void>;
+  listTemplates(): Promise<Template[]>;
+  exportTemplate(templateId: string): string;
+  importTemplate(templateJson: string): Promise<void>;
+  clearCache(templateId?: string): void;
 }
-
-/**
- * 消息模板验证Schema
- */
-export const messageTemplateSchema = z.object({
-  role: z.enum(['system', 'user', 'assistant']),
-  content: z.string().min(1)
-});
 
 /**
  * 提示词验证Schema
@@ -92,10 +55,7 @@ export const messageTemplateSchema = z.object({
 export const templateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  content: z.union([
-    z.string().min(1),
-    z.array(messageTemplateSchema).min(1)
-  ]),
+  content: z.string().min(1),
   metadata: z.object({
     version: z.string(),
     lastModified: z.number(),
@@ -104,4 +64,4 @@ export const templateSchema = z.object({
     templateType: z.enum(['optimize', 'iterate'])
   }),
   isBuiltin: z.boolean().optional()
-});
+}); 

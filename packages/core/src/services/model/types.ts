@@ -15,11 +15,7 @@ export interface ModelConfig {
   /** 是否启用 */
   enabled: boolean;
   /** 提供商 */
-  provider: 'deepseek' | 'gemini' | 'custom' | 'zhipu' | string;
-  /** 是否使用Vercel代理 */
-  useVercelProxy?: boolean;
-  /** LLM特定参数 */
-  llmParams?: Record<string, any>;
+  provider: 'deepseek' | 'gemini' | 'custom' | string;
 }
 
 /**
@@ -27,19 +23,17 @@ export interface ModelConfig {
  */
 export interface IModelManager {
   /** 获取所有模型配置 */
-  getAllModels(): Promise<Array<ModelConfig & { key: string }>>;
+  getAllModels(): ModelConfig[];
   /** 获取指定模型配置 */
-  getModel(key: string): Promise<ModelConfig | undefined>;
+  getModel(key: string): ModelConfig | undefined;
   /** 添加模型配置 */
-  addModel(key: string, config: ModelConfig): Promise<void>;
+  addModel(key: string, config: ModelConfig): void;
   /** 更新模型配置 */
-  updateModel(key: string, config: Partial<ModelConfig>): Promise<void>;
+  updateModel(key: string, config: Partial<ModelConfig>): void;
   /** 删除模型配置 */
-  deleteModel(key: string): Promise<void>;
+  deleteModel(key: string): void;
   /** 启用模型 */
-  enableModel(key: string): Promise<void>;
+  enableModel(key: string): void;
   /** 禁用模型 */
-  disableModel(key: string): Promise<void>;
-  /** 获取启用的模型 */
-  getEnabledModels(): Promise<Array<ModelConfig & { key: string }>>;
+  disableModel(key: string): void;
 } 

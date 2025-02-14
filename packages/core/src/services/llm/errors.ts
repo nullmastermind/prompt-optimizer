@@ -5,7 +5,7 @@ export class BaseError extends Error {
   constructor(message: string) {
     super(message);
     this.name = this.constructor.name;
-    Object.setPrototypeOf(this, new.target.prototype); // 确保原型链正确
+    Error.captureStackTrace(this, this.constructor);
   }
 }
 

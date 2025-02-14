@@ -1,16 +1,18 @@
-import { ILLMService, Message, StreamHandlers, ModelInfo, ModelOption } from './types';
+import { ILLMService, Message, RequestConfig } from './types';
 import { ModelConfig } from '../model/types';
-import { ModelManager, modelManager as defaultModelManager } from '../model/manager';
+import { ModelManager } from '../model/manager';
+import { ChatOpenAI } from '@langchain/openai';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
 import { APIError, RequestConfigError, ERROR_MESSAGES } from './errors';
-import OpenAI from 'openai';
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
-import { isVercel, getProxyUrl } from '../../utils/environment';
 
 /**
- * LLM服务实现 - 基于官方SDK
+ * LLM服务实现 - 基于 LangChain
  */
 export class LLMService implements ILLMService {
-  constructor(private modelManager: ModelManager) { }
+  private modelInstances: Map<string, ChatOpenAI | ChatGoogleGenerativeAI> = new Map();
+
+  constructor(private modelManager: ModelManager) {}
 
   /**
    * 验证消息格式
@@ -57,177 +59,138 @@ export class LLMService implements ILLMService {
   }
 
   /**
-   * 获取OpenAI实例
+   * 获取模型实例
    */
-  private getOpenAIInstance(modelConfig: ModelConfig, isStream: boolean = false): OpenAI {
-
-    const apiKey = modelConfig.apiKey || '';
-
-    // 处理baseURL，如果以'/chat/completions'结尾则去掉
-    let processedBaseURL = modelConfig.baseURL;
-    if (processedBaseURL?.endsWith('/chat/completions')) {
-      processedBaseURL = processedBaseURL.slice(0, -'/chat/completions'.length);
-    }
-
-    // 使用代理处理跨域问题
-    let finalBaseURL = processedBaseURL;
-    // 如果模型配置启用了Vercel代理且当前环境是Vercel，则使用代理
-    // 允许所有API包括OpenAI使用代理
-    if (modelConfig.useVercelProxy === true && isVercel() && processedBaseURL) {
-      finalBaseURL = getProxyUrl(processedBaseURL, isStream);
-      console.log(`使用${isStream ? '流式' : ''}API代理:`, finalBaseURL);
-    }
-
-    // 创建OpenAI实例配置
-    const defaultTimeout = isStream ? 90000 : 60000;
-    const timeout = modelConfig.llmParams?.timeout !== undefined
-                    ? modelConfig.llmParams.timeout
-                    : defaultTimeout;
-    const config: any = {
-      apiKey: apiKey,
-      baseURL: finalBaseURL,
-      dangerouslyAllowBrowser: true,
-      timeout: timeout, // Use the new timeout logic
-      maxRetries: isStream ? 2 : 3
-    };
-
-    const instance = new OpenAI(config);
-
-    return instance;
-  }
-
-  /**
-   * 获取Gemini实例
-   */
-  private getGeminiModel(modelConfig: ModelConfig, systemInstruction?: string, isStream: boolean = false): GenerativeModel {
-    const apiKey = modelConfig.apiKey || '';
-    const genAI = new GoogleGenerativeAI(apiKey);
-
-    // 创建模型配置
-    const modelOptions: any = {
-      model: modelConfig.defaultModel
-    };
-
-    // 如果有系统指令，添加到模型配置中
-    if (systemInstruction) {
-      modelOptions.systemInstruction = systemInstruction;
-    }
-
-    // 处理baseURL，如果以'/v1beta'结尾则去掉
-    let processedBaseURL = modelConfig.baseURL;
-    if (processedBaseURL?.endsWith('/v1beta')) {
-      processedBaseURL = processedBaseURL.slice(0, -'/v1beta'.length);
-    }
-    // 使用代理处理跨域问题
-    let finalBaseURL = processedBaseURL;
-    // 如果模型配置启用了Vercel代理且当前环境是Vercel，则使用代理
-    // 允许所有API包括OpenAI使用代理
-    if (modelConfig.useVercelProxy === true && isVercel() && processedBaseURL) {
-      finalBaseURL = getProxyUrl(processedBaseURL, isStream);
-      console.log(`使用${isStream ? '流式' : ''}API代理:`, finalBaseURL);
-    }
-    return genAI.getGenerativeModel(modelOptions, { "baseUrl": finalBaseURL });
-  }
-
-  /**
-   * 发送OpenAI消息
-   */
-  private async sendOpenAIMessage(messages: Message[], modelConfig: ModelConfig): Promise<string> {
-    const openai = this.getOpenAIInstance(modelConfig);
-
-    const formattedMessages = messages.map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }));
-
-    const {
-      timeout, // Handled in getOpenAIInstance
-      model: llmParamsModel, // Avoid overriding main model
-      messages: llmParamsMessages, // Avoid overriding main messages
-      ...restLlmParams
-    } = modelConfig.llmParams || {};
-
-    const completionConfig: any = {
-      model: modelConfig.defaultModel,
-      messages: formattedMessages,
-      ...restLlmParams // Spread other params from llmParams
-    };
-    const response = await openai.chat.completions.create(completionConfig);
-
-    return response.choices[0].message.content || '';
-  }
-
-  /**
-   * 发送Gemini消息
-   */
-  private async sendGeminiMessage(messages: Message[], modelConfig: ModelConfig): Promise<string> {
-    // 提取系统消息
-    const systemMessages = messages.filter(msg => msg.role === 'system');
-    const systemInstruction = systemMessages.length > 0
-      ? systemMessages.map(msg => msg.content).join('\n')
-      : '';
-
-    // 获取带有系统指令的模型实例
-    const model = this.getGeminiModel(modelConfig, systemInstruction, false);
-
-    // 过滤出用户和助手消息
-    const conversationMessages = messages.filter(msg => msg.role !== 'system');
-
-    // 创建聊天会话
-    const generationConfig = this.buildGeminiGenerationConfig(modelConfig.llmParams);
-
-    const chatOptions: any = {
-      history: this.formatGeminiHistory(conversationMessages)
-    };
-    if (Object.keys(generationConfig).length > 0) {
-      chatOptions.generationConfig = generationConfig;
-    }
-    const chat = model.startChat(chatOptions);
-
-    // 获取最后一条用户消息
-    const lastUserMessage = conversationMessages.length > 0 &&
-      conversationMessages[conversationMessages.length - 1].role === 'user'
-      ? conversationMessages[conversationMessages.length - 1].content
-      : '';
-
-    // 如果没有用户消息，返回空字符串
-    if (!lastUserMessage) {
-      return '';
-    }
-
-    // 发送消息并获取响应
-    const result = await chat.sendMessage(lastUserMessage);
-    return result.response.text();
-  }
-
-  /**
-   * 格式化Gemini历史消息
-   */
-  private formatGeminiHistory(messages: Message[]): any[] {
-    if (messages.length <= 1) {
-      return [];
-    }
-
-    // 排除最后一条消息（将由sendMessage单独发送）
-    const historyMessages = messages.slice(0, -1);
-    const formattedHistory = [];
-
-    for (let i = 0; i < historyMessages.length; i++) {
-      const msg = historyMessages[i];
-      if (msg.role === 'user') {
-        formattedHistory.push({
-          role: 'user',
-          parts: [{ text: msg.content }]
-        });
-      } else if (msg.role === 'assistant') {
-        formattedHistory.push({
-          role: 'model',
-          parts: [{ text: msg.content }]
-        });
+  private getModelInstance(modelConfig: ModelConfig): ChatOpenAI | ChatGoogleGenerativeAI {
+    try {
+      this.validateModelConfig(modelConfig);
+      
+      const cacheKey = `${modelConfig.provider}-${modelConfig.defaultModel}`;
+      
+      if (this.modelInstances.has(cacheKey)) {
+        return this.modelInstances.get(cacheKey)!;
       }
-    }
 
-    return formattedHistory;
+      let model;
+      switch (modelConfig.provider) {
+        case 'openai':
+        case 'deepseek':
+        case 'custom':
+          model = new ChatOpenAI({
+            apiKey: modelConfig.apiKey,
+            modelName: modelConfig.defaultModel,
+            configuration: {
+              apiKey: modelConfig.apiKey,
+              baseURL: modelConfig.baseURL
+            },
+            temperature: 0.7,
+            maxTokens: 2000,
+            streaming: true
+          });
+          break;
+        case 'gemini':
+          model = new ChatGoogleGenerativeAI({
+            apiKey: modelConfig.apiKey,
+            modelName: modelConfig.defaultModel,
+            maxOutputTokens: 2000,
+            temperature: 0.7,
+            streaming: true
+          });
+          break;
+        default:
+          throw new RequestConfigError(`不支持的模型提供商: ${modelConfig.provider}`);
+      }
+
+      this.modelInstances.set(cacheKey, model);
+      return model;
+    } catch (error: any) {
+      if (error instanceof RequestConfigError) {
+        throw error;
+      }
+      throw new APIError(`获取模型实例失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 将消息转换为 LangChain 格式
+   */
+  private convertToLangChainMessages(messages: Message[]): BaseMessage[] {
+    try {
+      this.validateMessages(messages);
+      
+      return messages.map(msg => {
+        const content = msg.content;
+        switch (msg.role) {
+          case 'system':
+            return new SystemMessage(content);
+          case 'user':
+            return new HumanMessage(content);
+          case 'assistant':
+            return new AIMessage(content);
+          default:
+            throw new RequestConfigError(`不支持的消息类型: ${msg.role}`);
+        }
+      });
+    } catch (error: any) {
+      if (error instanceof RequestConfigError) {
+        throw error;
+      }
+      throw new APIError(`消息转换失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 构建请求配置
+   */
+  buildRequestConfig(modelConfig: ModelConfig, messages: Message[]): RequestConfig {
+    try {
+      this.validateModelConfig(modelConfig);
+      this.validateMessages(messages);
+
+      return {
+        url: `${modelConfig.baseURL}/chat/completions`,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${modelConfig.apiKey}`
+        },
+        body: {
+          model: modelConfig.defaultModel,
+          messages: messages.map(({ role, content }) => ({ role, content }))
+        }
+      };
+    } catch (error: any) {
+      if (error instanceof RequestConfigError) {
+        throw error;
+      }
+      throw new APIError(`构建请求配置失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 发送请求
+   */
+  async sendRequest(config: RequestConfig): Promise<string> {
+    try {
+      const response = await fetch(config.url, {
+        method: 'POST',
+        headers: config.headers,
+        body: JSON.stringify(config.body)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.choices?.[0]?.message?.content) {
+        throw new Error('响应格式无效');
+      }
+      
+      return data.choices[0].message.content;
+    } catch (error: any) {
+      throw new APIError(`请求失败: ${error.message}`);
+    }
   }
 
   /**
@@ -239,7 +202,7 @@ export class LLMService implements ILLMService {
         throw new RequestConfigError('模型提供商不能为空');
       }
 
-      const modelConfig = await this.modelManager.getModel(provider);
+      const modelConfig = this.modelManager.getModel(provider);
       if (!modelConfig) {
         throw new RequestConfigError(`模型 ${provider} 不存在`);
       }
@@ -247,18 +210,11 @@ export class LLMService implements ILLMService {
       this.validateModelConfig(modelConfig);
       this.validateMessages(messages);
 
-      console.log('发送消息:', {
-        provider: modelConfig.provider,
-        model: modelConfig.defaultModel,
-        messagesCount: messages.length
-      });
-
-      if (modelConfig.provider === 'gemini') {
-        return this.sendGeminiMessage(messages, modelConfig);
-      } else {
-        // OpenAI兼容格式的API，包括DeepSeek和自定义模型
-        return this.sendOpenAIMessage(messages, modelConfig);
-      }
+      const model = this.getModelInstance(modelConfig);
+      const langChainMessages = this.convertToLangChainMessages(messages);
+      
+      const response = await model.invoke(langChainMessages);
+      return typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
     } catch (error: any) {
       if (error instanceof RequestConfigError || error instanceof APIError) {
         throw error;
@@ -273,166 +229,74 @@ export class LLMService implements ILLMService {
   async sendMessageStream(
     messages: Message[],
     provider: string,
-    callbacks: StreamHandlers
+    callbacks: {
+      onToken: (token: string) => void;
+      onComplete: () => void;
+      onError: (error: Error) => void;
+    }
   ): Promise<void> {
     try {
       console.log('开始流式请求:', { provider, messagesCount: messages.length });
       this.validateMessages(messages);
-
-      const modelConfig = await this.modelManager.getModel(provider);
+      
+      const modelConfig = this.modelManager.getModel(provider);
       if (!modelConfig) {
         throw new RequestConfigError(`模型 ${provider} 不存在`);
       }
 
-      this.validateModelConfig(modelConfig);
-
-      console.log('获取到模型实例:', {
+      const model = this.getModelInstance(modelConfig);
+      console.log('获取到模型实例:', { 
         provider: modelConfig.provider,
-        model: modelConfig.defaultModel
+        model: modelConfig.defaultModel 
+      });
+      
+      // 转换消息格式
+      const langchainMessages = messages.map(msg => {
+        switch (msg.role) {
+          case 'system':
+            return new SystemMessage(msg.content);
+          case 'user':
+            return new HumanMessage(msg.content);
+          case 'assistant':
+            return new AIMessage(msg.content);
+          default:
+            throw new Error(`不支持的消息类型: ${msg.role}`);
+        }
       });
 
-      if (modelConfig.provider === 'gemini') {
-        await this.streamGeminiMessage(messages, modelConfig, callbacks);
-      } else {
-        // OpenAI兼容格式的API，包括DeepSeek和自定义模型
-        await this.streamOpenAIMessage(messages, modelConfig, callbacks);
+      // 使用流式调用
+      console.log('开始获取流式响应...');
+      const stream = await model.stream(langchainMessages);
+      console.log('成功获取到流式响应');
+      
+      try {
+        for await (const chunk of stream) {
+          if (chunk.content) {
+            const content = typeof chunk.content === 'string' 
+              ? chunk.content 
+              : chunk.content.toString();
+            
+            console.log('收到数据块:', { 
+              contentType: typeof chunk.content,
+              contentLength: content.length,
+              content: content.substring(0, 50) + '...' 
+            });
+
+            // 确保每个 token 都被正确处理
+            await callbacks.onToken(content);
+            // 添加小延迟，让 UI 有时间更新
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        }
+        console.log('流式响应完成');
+        callbacks.onComplete();
+      } catch (error) {
+        console.error('流式处理过程中出错:', error);
+        callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+        throw error;
       }
     } catch (error) {
       console.error('流式请求失败:', error);
-      callbacks.onError(error instanceof Error ? error : new Error(String(error)));
-      throw error;
-    }
-  }
-
-  /**
-   * 流式发送OpenAI消息
-   */
-  private async streamOpenAIMessage(
-    messages: Message[],
-    modelConfig: ModelConfig,
-    callbacks: StreamHandlers
-  ): Promise<void> {
-    // 获取流式OpenAI实例
-    const openai = this.getOpenAIInstance(modelConfig, true);
-
-    const formattedMessages = messages.map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }));
-
-    try {
-      console.log('开始创建流式请求...');
-      const {
-        timeout, // Handled in getOpenAIInstance
-        model: llmParamsModel, // Avoid overriding main model
-        messages: llmParamsMessages, // Avoid overriding main messages
-        stream: llmParamsStream, // Avoid overriding main stream flag
-        ...restLlmParams
-      } = modelConfig.llmParams || {};
-
-      const completionConfig: any = {
-        model: modelConfig.defaultModel,
-        messages: formattedMessages,
-        stream: true, // Essential for streaming
-        ...restLlmParams // User-defined parameters from llmParams
-      };
-      
-      // 直接使用流式响应，无需类型转换
-      const stream = await openai.chat.completions.create(completionConfig);
-
-      console.log('成功获取到流式响应');
-
-      // 使用类型断言来确保TypeScript知道这是流式响应
-      for await (const chunk of stream as any) {
-        const content = chunk.choices[0]?.delta?.content || '';
-        if (content) {
-          console.log('收到数据块:', {
-            contentLength: content.length,
-            content: content.substring(0, 50) + (content.length > 50 ? '...' : '')
-          });
-
-          callbacks.onToken(content);
-          // 添加小延迟，让UI有时间更新
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
-      }
-
-      console.log('流式响应完成');
-      callbacks.onComplete();
-    } catch (error) {
-      console.error('流式处理过程中出错:', error);
-      callbacks.onError(error instanceof Error ? error : new Error(String(error)));
-      throw error;
-    }
-  }
-
-  /**
-   * 流式发送Gemini消息
-   */
-  private async streamGeminiMessage(
-    messages: Message[],
-    modelConfig: ModelConfig,
-    callbacks: StreamHandlers
-  ): Promise<void> {
-    // 提取系统消息
-    const systemMessages = messages.filter(msg => msg.role === 'system');
-    const systemInstruction = systemMessages.length > 0
-      ? systemMessages.map(msg => msg.content).join('\n')
-      : '';
-
-    // 获取带有系统指令的模型实例
-    const model = this.getGeminiModel(modelConfig, systemInstruction, true);
-
-    // 过滤出用户和助手消息
-    const conversationMessages = messages.filter(msg => msg.role !== 'system');
-
-    // 创建聊天会话
-    const generationConfig = this.buildGeminiGenerationConfig(modelConfig.llmParams);
-
-    const chatOptions: any = {
-      history: this.formatGeminiHistory(conversationMessages)
-    };
-    if (Object.keys(generationConfig).length > 0) {
-      chatOptions.generationConfig = generationConfig;
-    }
-    const chat = model.startChat(chatOptions);
-
-    // 获取最后一条用户消息
-    const lastUserMessage = conversationMessages.length > 0 &&
-      conversationMessages[conversationMessages.length - 1].role === 'user'
-      ? conversationMessages[conversationMessages.length - 1].content
-      : '';
-
-    // 如果没有用户消息，返回空字符串
-    if (!lastUserMessage) {
-      callbacks.onComplete();
-      return;
-    }
-
-    try {
-      console.log('开始创建Gemini流式请求...');
-      const result = await chat.sendMessageStream(lastUserMessage);
-
-      console.log('成功获取到流式响应');
-
-      for await (const chunk of result.stream) {
-        const text = chunk.text();
-        if (text) {
-          console.log('收到数据块:', {
-            contentLength: text.length,
-            content: text.substring(0, 50) + (text.length > 50 ? '...' : '')
-          });
-
-          await callbacks.onToken(text);
-          // 添加小延迟，让UI有时间更新
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
-      }
-
-      console.log('流式响应完成');
-      callbacks.onComplete();
-    } catch (error) {
-      console.error('流式处理过程中出错:', error);
       callbacks.onError(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -446,9 +310,6 @@ export class LLMService implements ILLMService {
       if (!provider) {
         throw new RequestConfigError('模型提供商不能为空');
       }
-      console.log('测试连接provider:', {
-        provider: provider,
-      });
 
       // 发送一个简单的测试消息
       const testMessages: Message[] = [
@@ -468,206 +329,9 @@ export class LLMService implements ILLMService {
       throw new APIError(`连接测试失败: ${error.message}`);
     }
   }
-
-  /**
-   * 获取模型列表，以下拉选项格式返回
-   * @param provider 提供商标识
-   * @param customConfig 自定义配置（可选）
-   */
-  async fetchModelList(
-    provider: string,
-    customConfig?: Partial<ModelConfig>
-  ): Promise<ModelOption[]> {
-    try {
-      // 获取基础配置
-      let modelConfig = await this.modelManager.getModel(provider);
-
-      // 如果提供了自定义配置，则合并到基础配置
-      if (customConfig) {
-        modelConfig = {
-          ...modelConfig,
-          ...(customConfig as ModelConfig),
-        };
-      }
-
-      if (!modelConfig) {
-        console.warn(`模型 ${provider} 不存在，使用自定义配置`);
-        if (!customConfig) {
-          throw new RequestConfigError(`模型 ${provider} 不存在`);
-        }
-        modelConfig = customConfig as ModelConfig;
-      }
-
-      // 验证必要的配置（仅验证API URL和密钥）
-      if (!modelConfig.baseURL) {
-        throw new RequestConfigError('API URL不能为空');
-      }
-      if (!modelConfig.apiKey) {
-        throw new RequestConfigError(ERROR_MESSAGES.API_KEY_REQUIRED);
-      }
-
-      let models: ModelInfo[] = [];
-
-      // 根据不同提供商实现不同的获取模型列表逻辑
-      console.log(`获取 ${modelConfig.name || provider} 的模型列表`);
-
-      if (provider === 'gemini' || modelConfig.provider === 'gemini') {
-        models = await this.fetchGeminiModelsInfo(modelConfig);
-      } else if (provider === 'anthropic' || modelConfig.provider === 'anthropic') {
-        models = await this.fetchAnthropicModelsInfo(modelConfig);
-      } else if (provider === 'deepseek' || modelConfig.provider === 'deepseek') {
-        models = await this.fetchDeepSeekModelsInfo(modelConfig);
-      } else {
-        // OpenAI兼容格式的API，包括自定义模型和Ollama
-        models = await this.fetchOpenAICompatibleModelsInfo(modelConfig);
-      }
-
-      // 转换为选项格式
-      return models.map(model => ({
-        value: model.id,
-        label: model.name
-      }));
-    } catch (error: any) {
-      console.error('获取模型列表失败:', error);
-      if (error instanceof RequestConfigError || error instanceof APIError) {
-        throw error;
-      }
-      throw new APIError(`获取模型列表失败: ${error.message}`);
-    }
-  }
-
-  /**
-   * 获取OpenAI兼容API的模型信息
-   */
-  private async fetchOpenAICompatibleModelsInfo(modelConfig: ModelConfig): Promise<ModelInfo[]> {
-    const openai = this.getOpenAIInstance(modelConfig);
-
-    try {
-      // 尝试标准 OpenAI 格式的模型列表请求
-      const response = await openai.models.list();
-      console.log('API返回的原始模型列表:', response);
-
-      // 只处理标准 OpenAI 格式
-      if (response && response.data && Array.isArray(response.data)) {
-        return response.data
-          .map(model => ({
-            id: model.id,
-            name: model.id
-          }))
-          .sort((a, b) => a.id.localeCompare(b.id));
-      }
-
-      // 如果格式不匹配标准格式，记录并返回空数组
-      console.warn('API返回格式与预期不符:', response);
-      return [];
-
-    } catch (error: any) {
-      console.error('获取模型列表失败:', error);
-      console.log('错误详情:', error.response?.data || error.message);
-
-      // 发生错误时返回空数组
-      return [];
-    }
-  }
-  /**
-   * 获取Gemini模型信息
-   */
-  private async fetchGeminiModelsInfo(modelConfig: ModelConfig): Promise<ModelInfo[]> {
-    console.log(`获取${modelConfig.name || 'Gemini'}的模型列表`);
-
-    // Gemini API没有直接获取模型列表的接口，返回预定义列表
-    return [
-      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' }
-    ];
-  }
-
-  /**
-   * 获取Anthropic模型信息
-   */
-  private async fetchAnthropicModelsInfo(modelConfig: ModelConfig): Promise<ModelInfo[]> {
-    console.log(`获取${modelConfig.name || 'Anthropic'}的模型列表`);
-
-    // Anthropic API的获取模型列表功能未兼容openai格式，所以这里返回一个默认列表
-    return [
-      { id: 'claude-opus-4-20250514', name: 'Claude 4.0 Opus' },
-      { id: 'claude-sonnet-4-20250514', name: 'Claude 4.0 Sonnet' },
-      { id: 'claude-3-7-sonnet-latest', name: 'Claude 3.7 Sonnet' },
-      { id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku' }
-    ];
-  }
-
-  /**
-   * 获取DeepSeek模型信息
-   */
-  private async fetchDeepSeekModelsInfo(modelConfig: ModelConfig): Promise<ModelInfo[]> {
-    console.log(`获取${modelConfig.name || 'DeepSeek'}的模型列表`);
-
-    try {
-      // 尝试使用OpenAI兼容API获取模型列表
-      return await this.fetchOpenAICompatibleModelsInfo(modelConfig);
-    } catch (error) {
-      console.error('获取DeepSeek模型列表失败，使用默认列表:', error);
-
-      // 返回默认模型
-      return [
-        { id: 'deepseek-chat', name: 'DeepSeek Chat' },
-        { id: 'deepseek-coder', name: 'DeepSeek Coder' }
-      ];
-    }
-  }
-
-  /**
-   * 构建Gemini生成配置
-   * 
-   * 注意：此方法假设传入的 llmParams 已经通过 ModelManager.validateConfig() 
-   * 中的 validateLLMParams 验证，确保安全性
-   */
-  private buildGeminiGenerationConfig(llmParams: Record<string, any> = {}): any {
-    const {
-      temperature,
-      maxOutputTokens,
-      topP,
-      topK,
-      candidateCount,
-      stopSequences,
-      ...otherParams
-    } = llmParams;
-
-    const generationConfig: any = {};
-    
-    // 添加已知参数
-    if (temperature !== undefined) {
-      generationConfig.temperature = temperature;
-    }
-    if (maxOutputTokens !== undefined) {
-      generationConfig.maxOutputTokens = maxOutputTokens;
-    }
-    if (topP !== undefined) {
-      generationConfig.topP = topP;
-    }
-    if (topK !== undefined) {
-      generationConfig.topK = topK;
-    }
-    if (candidateCount !== undefined) {
-      generationConfig.candidateCount = candidateCount;
-    }
-    if (stopSequences !== undefined && Array.isArray(stopSequences)) {
-      generationConfig.stopSequences = stopSequences;
-    }
-
-    // 添加其他参数 (已在上层验证过安全性)
-    // 排除一些明显不属于 Gemini generationConfig 的参数
-    for (const [key, value] of Object.entries(otherParams)) {
-      if (!['timeout', 'model', 'messages', 'stream'].includes(key)) {
-        generationConfig[key] = value;
-      }
-    }
-
-    return generationConfig;
-  }
 }
 
 // 导出工厂函数
-export function createLLMService(modelManager: ModelManager = defaultModelManager): LLMService {
+export function createLLMService(modelManager: ModelManager): LLMService {
   return new LLMService(modelManager);
 } 

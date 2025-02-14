@@ -9,26 +9,6 @@ export class HistoryError extends Error {
 }
 
 /**
- * 历史记录未找到错误
- */
-export class HistoryNotFoundError extends HistoryError {
-  constructor(id: string) {
-    super(`未找到ID为${id}的历史记录`);
-    this.name = 'HistoryNotFoundError';
-  }
-}
-
-/**
- * 历史记录链错误
- */
-export class HistoryChainError extends HistoryError {
-  constructor(message: string) {
-    super(message);
-    this.name = 'HistoryChainError';
-  }
-}
-
-/**
  * 记录不存在错误
  */
 export class RecordNotFoundError extends HistoryError {
@@ -47,7 +27,7 @@ export class RecordNotFoundError extends HistoryError {
 export class StorageError extends HistoryError {
   constructor(
     message: string,
-    public operation: 'read' | 'write' | 'delete' | 'init' | 'storage'
+    public operation: 'read' | 'write' | 'delete' | 'init'
   ) {
     super(message);
     this.name = 'StorageError';

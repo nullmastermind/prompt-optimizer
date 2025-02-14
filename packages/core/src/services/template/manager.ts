@@ -1,13 +1,6 @@
-import { ITemplateManager, Template, TemplateManagerConfig } from './types';
-import { IStorageProvider } from '../storage/types';
-import { StorageFactory } from '../storage/factory';
+import { ITemplateManager, Template, TemplateManagerConfig, templateSchema } from './types';
 import { DEFAULT_TEMPLATES } from './defaults';
-import { DEFAULT_TEMPLATES_EN } from './defaults_en';
 import { TemplateError, TemplateValidationError } from './errors';
-import { templateSchema } from './types';
-import { templateLanguageService, BuiltinTemplateLanguage } from './languageService';
-
-
 
 /**
  * 提示词管理器实现
@@ -16,327 +9,192 @@ export class TemplateManager implements ITemplateManager {
   private readonly builtinTemplates: Map<string, Template>;
   private readonly userTemplates: Map<string, Template>;
   private readonly config: Required<TemplateManagerConfig>;
-  private initPromise: Promise<void> | null = null;
-  protected initialized = false;
 
-  constructor(private storageProvider: IStorageProvider, config?: TemplateManagerConfig) {
-    // Default configuration
-    this.config = {
-      storageKey: 'app:templates',
-      cacheTimeout: 5 * 60 * 1000, // Default cache timeout: 5 minutes
-      ...config
-    };
-
-    // Initialize template maps
+  constructor(config?: TemplateManagerConfig) {
     this.builtinTemplates = new Map();
     this.userTemplates = new Map();
-
-    // Initialize asynchronously with improved error handling
-    this.initPromise = this.init().catch(error => {
-      console.error('Template manager initialization failed:', error);
-      // Don't rethrow - allow fallback initialization
-      return this.fallbackInit();
-    });
-  }
-
-  private async init(): Promise<void> {
-    try {
-      // Initialize template language service first
-      await templateLanguageService.initialize();
-
-      // Load built-in templates based on current language
-      await this.loadBuiltinTemplates();
-
-      // Load user templates
-      await this.loadUserTemplates();
-
-      this.initialized = true;
-    } catch (error) {
-      console.error('Template manager initialization failed:', error);
-      this.initialized = false;
-      throw error;
-    }
+    this.config = {
+      storageKey: 'app:templates',
+      cacheTimeout: 5 * 60 * 1000,
+      ...config
+    };
   }
 
   /**
-   * Fallback initialization with default templates
+   * 初始化提示词管理器
    */
-  private async fallbackInit(): Promise<void> {
+  async init(): Promise<void> {
     try {
-      console.log('Attempting fallback initialization with default templates');
-      
-      // Clear any partially loaded templates
+      // 需要先清空已有提示词避免重复加载
       this.builtinTemplates.clear();
-      
-      // Load default Chinese templates as fallback
-      const { DEFAULT_TEMPLATES } = await import('./defaults');
+      this.userTemplates.clear();
+
+      // 加载内置提示词需要深拷贝避免引用问题
       for (const [id, template] of Object.entries(DEFAULT_TEMPLATES)) {
-        this.builtinTemplates.set(id, { ...template, isBuiltin: true });
+        this.builtinTemplates.set(id, JSON.parse(JSON.stringify({
+          ...template,
+          isBuiltin: true
+        })));
       }
-      
-      // Try to load user templates (non-critical)
-      try {
-        await this.loadUserTemplates();
-      } catch (userTemplateError) {
-        console.warn('Failed to load user templates during fallback:', userTemplateError);
+
+      // 增加加载后的验证
+      if (this.builtinTemplates.size === 0) {
+        throw new TemplateError('内置提示词加载失败');
       }
-      
-      this.initialized = true;
-      console.log('Fallback initialization completed');
-    } catch (fallbackError) {
-      console.error('Fallback initialization also failed:', fallbackError);
-      this.initialized = false;
-      throw fallbackError;
-    }
-  }
 
-  /**
-   * Ensure the template manager is initialized
-   * This should be called before any template operations
-   */
-  async ensureInitialized(): Promise<void> {
-    if (this.initialized) {
-      return;
-    }
-
-    if (!this.initPromise) {
-      this.initPromise = this.init();
-    }
-
-    try {
-      await this.initPromise;
+      await this.loadUserTemplates();
     } catch (error) {
-      // Reset initPromise to allow retry
-      this.initPromise = null;
-      // If initialization still fails, at least ensure we have some templates
-      if (!this.initialized) {
-        console.error('Initialization failed, attempting emergency fallback');
-        await this.fallbackInit();
-      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new TemplateError(`初始化失败: ${errorMessage}`);
     }
   }
 
   /**
-   * Check if the template manager is initialized
+   * 获取提示词
    */
-  isInitialized(): boolean {
-    return this.initialized;
-  }
-
-  /**
-   * Private method to check initialization state for sync methods
-   */
-  private checkInitialized(methodName: string): void {
-    if (!this.initialized) {
-      throw new TemplateError(`Template manager not initialized. Call ensureInitialized() first before using ${methodName}.`);
+  async getTemplate(templateId: string): Promise<Template> {
+    // 增加空值校验
+    if (!templateId || typeof templateId !== 'string') {
+      throw new TemplateError('无效的提示词ID');
     }
-  }
 
-  /**
-   * Private method to ensure initialization for async methods
-   */
-  private async ensureInitForAsyncMethod(): Promise<void> {
-    await this.ensureInitialized();
-  }
-
-  private validateTemplateSchema(template: Partial<Template>): void {
-    const result = templateSchema.safeParse(template);
-    if (!result.success) {
-      const errors = result.error.format();
-      throw new TemplateValidationError(
-        'Template validation failed: ' + Object.keys(errors)
-          .filter(key => key !== '_errors')
-          .map(() => 'Required')
-          .join(', ')
-      );
-    }
-  }
-
-  /**
-   * Validates template type
-   * @param type Template type
-   */
-  private validateTemplateType(type: string): void {
-    const validTypes = ['optimize', 'iterate'];
-    if (!validTypes.includes(type)) {
-      throw new TemplateValidationError('Invalid template type');
-    }
-  }
-
-  /**
-   * Validates template ID
-   * @param id Template ID
-   */
-  private validateTemplateId(id: string | null | undefined): void {
-    if (!id) {
-      throw new TemplateError('Invalid template ID');
+    // 优先检查用户提示词
+    const template = this.userTemplates.get(templateId) || 
+                    this.builtinTemplates.get(templateId);
+    
+    if (!template) {
+      // 增加调试信息
+      console.debug('可用提示词:', [...this.builtinTemplates.keys(), ...this.userTemplates.keys()]);
+      throw new TemplateError(`提示词 ${templateId} 不存在`);
     }
     
-    // Minimum 3 characters, only letters, numbers, and hyphens
-    const idRegex = /^[a-z0-9-]{3,}$/;
-    if (!idRegex.test(id)) {
-      throw new TemplateValidationError('Invalid template ID format: must be at least 3 characters, using only lowercase letters, numbers, and hyphens');
-    }
+    // 返回深拷贝避免外部修改
+    return JSON.parse(JSON.stringify(template));
   }
 
   /**
-   * Gets a template by ID
-   * @param id Template ID
-   * @returns Template
-   */
-  /**
-   * Gets a template by ID
-   * @param id Template ID
-   * @returns Template
-   */
-  getTemplate(id: string | null | undefined): Template {
-    this.checkInitialized('getTemplate');
-    this.validateTemplateId(id);
-
-    // Check built-in templates first
-    if (this.builtinTemplates.has(id!)) {
-      return this.builtinTemplates.get(id!)!;
-    }
-
-    // Check user templates
-    if (this.userTemplates.has(id!)) {
-      return this.userTemplates.get(id!)!;
-    }
-
-    // If we get here, the template wasn't found
-    const available = [...this.builtinTemplates.keys(), ...this.userTemplates.keys()];
-    throw new TemplateError(`Template ${id} not found, available templates: ${JSON.stringify(available, null, 2)}`);
-  }
-
-  /**
-   * Saves a template
-   * @param template Template to save
-   * @returns Promise<void>
+   * 保存用户提示词
    */
   async saveTemplate(template: Template): Promise<void> {
-    await this.ensureInitForAsyncMethod();
-
-    // Validate ID
-    this.validateTemplateId(template.id);
-
-    // Validate template type
-    if (template.metadata?.templateType) {
-      this.validateTemplateType(template.metadata.templateType);
+    // 增加类型校验
+    if (!['optimize', 'iterate'].includes(template.metadata.templateType)) {
+      throw new TemplateValidationError('无效的提示词类型');
     }
 
-    // Prevent overwriting built-in templates
+    // 增加ID格式校验
+    if (!/^[a-zA-Z0-9_-]{3,50}$/.test(template.id)) {
+      throw new TemplateValidationError('提示词ID格式无效（3-50位字母数字）');
+    }
+
+    // 保留原始提示词的不可变属性
+    if (this.userTemplates.has(template.id)) {
+      const original = this.userTemplates.get(template.id)!;
+      template = {
+        ...original,
+        ...template,
+        metadata: {
+          ...original.metadata,
+          ...template.metadata,
+          lastModified: Date.now()
+        }
+      };
+    }
+
+    // 验证提示词
+    const result = templateSchema.safeParse(template);
+    if (!result.success) {
+      throw new TemplateValidationError(`提示词验证失败: ${result.error.message}`);
+    }
+      
+    // 不允许覆盖内置提示词
     if (this.builtinTemplates.has(template.id)) {
-      throw new TemplateError(`Cannot overwrite built-in template: ${template.id}`);
+      throw new TemplateError(`不能覆盖内置提示词: ${template.id}`);
     }
 
-    // Validate schema
-    this.validateTemplateSchema(template);
-
-    // Set isBuiltin to false and add timestamp
-    const templateToSave: Template = {
-      ...template,
-      isBuiltin: false,
-      metadata: {
-        ...template.metadata,
-        lastModified: Date.now()
-      }
-    };
-
-    // Add to user templates
-    this.userTemplates.set(template.id, templateToSave);
-
-    // Persist
+    // 只在没有时间戳时设置
+    if (!template.metadata.lastModified) {
+      template.metadata.lastModified = Date.now();
+    }
+    
+    // 保存提示词
+    this.userTemplates.set(template.id, { ...template, isBuiltin: false });
     await this.persistUserTemplates();
   }
 
   /**
-   * Deletes a template
-   * @param id Template ID
+   * 删除用户提示词
    */
-  async deleteTemplate(id: string): Promise<void> {
-    await this.ensureInitForAsyncMethod();
+  async deleteTemplate(templateId: string): Promise<void> {
+    if (this.builtinTemplates.has(templateId)) {
+      throw new TemplateError(`不能删除内置提示词: ${templateId}`);
+    }
 
-    // Validate ID
-    this.validateTemplateId(id);
-    
-    // Check if it's a built-in template
-    if (this.builtinTemplates.has(id)) {
-      throw new TemplateError(`Cannot delete built-in template: ${id}`);
+    if (!this.userTemplates.has(templateId)) {
+      throw new TemplateError(`提示词不存在: ${templateId}`);
     }
-    
-    // Check if the template exists
-    if (!this.userTemplates.has(id)) {
-      throw new TemplateError(`Template not found: ${id}`);
-    }
-    
-    // Delete from user templates
-    this.userTemplates.delete(id);
-    
-    // Persist
+
+    this.userTemplates.delete(templateId);
     await this.persistUserTemplates();
   }
 
   /**
-   * List all templates
+   * 列出所有提示词
    */
-  listTemplates(): Template[] {
-    this.checkInitialized('listTemplates');
-
+  async listTemplates(): Promise<Template[]> {
     const templates = [
       ...Array.from(this.builtinTemplates.values()),
       ...Array.from(this.userTemplates.values())
     ];
+    
     return templates.sort((a, b) => {
-      // Built-in templates come first
+      // 内置提示词排在前面
       if (a.isBuiltin !== b.isBuiltin) {
         return a.isBuiltin ? -1 : 1;
       }
-
-      // Non-built-in templates sorted by timestamp descending
+      
+      // 非内置提示词按时间戳倒序
       if (!a.isBuiltin && !b.isBuiltin) {
         const timeA = a.metadata.lastModified || 0;
         const timeB = b.metadata.lastModified || 0;
         return timeB - timeA;
       }
-
+      
       return 0;
     });
   }
 
   /**
-   * Exports a template as a JSON string
-   * @param id Template ID
-   * @returns Template as JSON string
+   * 导出提示词
    */
-  exportTemplate(id: string): string {
-    const template = this.getTemplate(id);
+  exportTemplate(templateId: string): string {
+    const template = this.userTemplates.get(templateId) || 
+                    this.builtinTemplates.get(templateId);
+    if (!template) {
+      throw new TemplateError(`提示词不存在: ${templateId}`);
+    }
     return JSON.stringify(template, null, 2);
   }
 
   /**
-   * Imports a template from a JSON string
-   * @param jsonString Template as JSON string
-   * @returns Promise<void>
+   * 导入提示词
    */
-  async importTemplate(jsonString: string): Promise<void> {
+  async importTemplate(templateJson: string): Promise<void> {
     try {
-      const template = JSON.parse(jsonString);
-      
-      // Validate schema
-      this.validateTemplateSchema(template);
-      
-      // Save template
-      await this.saveTemplate(template);
-    } catch (error) {
-      if (error instanceof TemplateError || error instanceof TemplateValidationError) {
-        throw error;
+      const template = JSON.parse(templateJson) as Template;
+      const result = templateSchema.safeParse(template);
+      if (!result.success) {
+        throw new TemplateValidationError(`提示词验证失败: ${result.error.errors.map(e => e.message).join(', ')}`);
       }
-      throw new TemplateError(`Failed to import template: ${error instanceof Error ? error.message : String(error)}`);
+      this.userTemplates.set(template.id, template);
+      await this.persistUserTemplates();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new TemplateError(`导入提示词失败: ${errorMessage}`);
     }
   }
 
   /**
-   * Clear cache
+   * 清除缓存
    */
   clearCache(templateId?: string): void {
     if (templateId) {
@@ -347,150 +205,67 @@ export class TemplateManager implements ITemplateManager {
   }
 
   /**
-   * Saves user templates to storage
+   * 持久化用户提示词
    */
   private async persistUserTemplates(): Promise<void> {
     try {
       const templates = Array.from(this.userTemplates.values());
-      await this.storageProvider.setItem(
-        this.config.storageKey,
-        JSON.stringify(templates)
-      );
+      localStorage.setItem(this.config.storageKey, JSON.stringify(templates));
     } catch (error) {
-      throw new TemplateError(`Failed to save user templates: ${error instanceof Error ? error.message : String(error)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new TemplateError(`保存用户提示词失败: ${errorMessage}`);
     }
   }
 
   /**
-   * Load built-in templates based on current language setting
-   */
-  private async loadBuiltinTemplates(): Promise<void> {
-    try {
-      // Clear existing built-in templates
-      this.builtinTemplates.clear();
-
-      // Get current language from template language service
-      const currentLanguage = templateLanguageService.getCurrentLanguage();
-
-      // Load appropriate template set based on language
-      const templateSet = await this.getTemplateSet(currentLanguage);
-
-      // Load templates from selected set
-      for (const [id, template] of Object.entries(templateSet)) {
-        this.builtinTemplates.set(id, { ...template, isBuiltin: true });
-      }
-
-      console.log(`Loaded built-in templates in ${currentLanguage} (${this.builtinTemplates.size} templates)`);
-    } catch (error) {
-      console.error('Failed to load built-in templates:', error);
-      // Fallback to Chinese templates
-      for (const [id, template] of Object.entries(DEFAULT_TEMPLATES)) {
-        this.builtinTemplates.set(id, { ...template, isBuiltin: true });
-      }
-    }
-  }
-
-  /**
-   * Get template set for the specified language
-   * This method provides better extensibility for adding new languages
-   */
-  private async getTemplateSet(language: BuiltinTemplateLanguage): Promise<Record<string, Template>> {
-    switch (language) {
-      case 'en-US':
-        return DEFAULT_TEMPLATES_EN;
-      case 'zh-CN':
-        return DEFAULT_TEMPLATES;
-      default:
-        console.warn(`Unsupported language: ${language}, falling back to Chinese templates`);
-        return DEFAULT_TEMPLATES;
-    }
-  }
-
-  /**
-   * Reload built-in templates with new language
-   * This method can be called when user changes built-in template language
-   */
-  async reloadBuiltinTemplates(): Promise<void> {
-    await this.loadBuiltinTemplates();
-  }
-
-  /**
-   * Loads user templates from storage
+   * 加载用户提示词
    */
   private async loadUserTemplates(): Promise<void> {
     try {
-      const data = await this.storageProvider.getItem(this.config.storageKey);
-      if (!data) return;
-      
-      const templates = JSON.parse(data) as Template[];
-      
-      // Add each template to the map
-      templates.forEach(template => {
-        // Ensure isBuiltin is set to false for loaded templates
-        this.userTemplates.set(template.id, {
-          ...template,
-          isBuiltin: false
+      const data = localStorage.getItem(this.config.storageKey);
+      if (data) {
+        const templates = JSON.parse(data) as Template[];
+        templates.forEach(template => {
+          this.userTemplates.set(template.id, template);
         });
-      });
+      }
     } catch (error) {
-      throw new TemplateError(`Failed to load user templates: ${error instanceof Error ? error.message : String(error)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new TemplateError(`加载用户提示词失败: ${errorMessage}`);
     }
   }
 
   /**
-   * Get templates by type
-   * @deprecated Use listTemplatesByType instead
-   */
-  getTemplatesByType(type: 'optimize' | 'iterate'): Template[] {
-    return this.listTemplatesByType(type);
-  }
-
-  /**
-   * List templates by type
+   * 按类型列出提示词
    */
   listTemplatesByType(type: 'optimize' | 'iterate'): Template[] {
+    return [...this.builtinTemplates.values(), ...this.userTemplates.values()].filter(
+      template => template.metadata.templateType === type
+    );
+  }
+
+  /**
+   * 根据提示词类型获取提示词列表
+   * @param type 提示词类型 ('optimize' | 'iterate')
+   * @returns 指定类型的提示词列表
+   */
+  async getTemplatesByType(type: 'optimize' | 'iterate'): Promise<Template[]> {
     try {
-      return this.listTemplates().filter(
-        template => template.metadata.templateType === type
-      );
+      const templates = await this.listTemplates()
+      return templates.filter(template => 
+        template.metadata?.templateType === type
+      )
     } catch (error) {
-      console.error(`Failed to get ${type} template list:`, error);
-      return [];
+      console.error('获取提示词列表失败:', error)
+      throw new TemplateError('获取提示词列表失败')
     }
-  }
-
-  /**
-   * Change built-in template language
-   */
-  async changeBuiltinTemplateLanguage(language: BuiltinTemplateLanguage): Promise<void> {
-    try {
-      // Update language service
-      await templateLanguageService.setLanguage(language);
-
-      // Reload built-in templates with new language
-      await this.reloadBuiltinTemplates();
-
-      console.log(`Changed built-in template language to ${language}`);
-    } catch (error) {
-      console.error('Failed to change built-in template language:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get current built-in template language
-   */
-  getCurrentBuiltinTemplateLanguage(): BuiltinTemplateLanguage {
-    return templateLanguageService.getCurrentLanguage();
-  }
-
-  /**
-   * Get supported built-in template languages
-   */
-  getSupportedBuiltinTemplateLanguages(): BuiltinTemplateLanguage[] {
-    return templateLanguageService.getSupportedLanguages();
   }
 }
 
-// Export singleton instance
-export const templateManager = new TemplateManager(StorageFactory.createDefault());
+// 导出单例实例
+export const templateManager = new TemplateManager();
+
+// 初始化提示词管理器
+templateManager.init().catch(error => {
+  console.error('提示词管理器初始化失败:', error);
+}); 
