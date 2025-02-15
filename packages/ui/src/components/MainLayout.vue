@@ -1,11 +1,10 @@
 <template>
-  <div class="min-h-screen transition-colors duration-300">
+  <div class="min-h-screen bg-gradient-to-br from-purple-900 to-purple-950 flex flex-col">
     <!-- 顶部导航栏 -->
-    <header class="theme-header">
+    <header class="flex-none sticky top-0 z-40 bg-purple-800/90 backdrop-blur-sm border-b border-purple-700/50 shadow-lg">
       <div class="container mx-auto px-2 sm:px-4 py-2 sm:py-3 flex justify-between items-center">
-        <h1 class="text-lg sm:text-xl font-bold theme-title flex items-center gap-2">
-          <img src="../assets/logo.jpg" alt="Logo" class="h-8 w-8 rounded-lg" />
-          <slot name="title">{{ t('common.appName') }}</slot>
+        <h1 class="text-lg sm:text-xl font-bold text-white">
+          <slot name="title">Prompt Optimizer</slot>
         </h1>
         <div class="flex items-center gap-1 sm:gap-3">
           <slot name="actions"></slot>
@@ -14,8 +13,8 @@
     </header>
 
     <!-- 主要内容区域 -->
-    <main class="flex-1 container mx-auto p-2 sm:p-4 lg:overflow-hidden">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-4 sm:h-[calc(100vh-5.8rem)]">
+    <main class="flex-1 container mx-auto p-2 sm:p-4 overflow-hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-4 h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)]">
         <slot></slot>
       </div>
     </main>
@@ -24,15 +23,12 @@
     <slot name="modals"></slot>
 
     <!-- 全局提示 -->
-    <ToastUI />
+    <Toast />
   </div>
 </template>
 
-<script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-import { ToastUI } from '../index'
-
-const { t } = useI18n()
+<script setup>
+import { Toast } from '../index'
 </script>
 
 <style>
@@ -46,4 +42,27 @@ const { t } = useI18n()
 .custom-select::-ms-expand {
   display: none;
 }
-</style>
+
+/* 优化滚动条样式 */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 隐藏水平滚动条 */
+::-webkit-scrollbar-horizontal {
+  display: none;
+}
+</style> 

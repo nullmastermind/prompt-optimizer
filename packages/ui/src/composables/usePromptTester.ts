@@ -1,31 +1,26 @@
 import { ref } from 'vue'
 import { useToast } from './useToast'
-import { useI18n } from 'vue-i18n'
-import type { Ref } from 'vue'
-import type { IPromptService } from '@prompt-optimizer/core'
+import type { PromptService } from '../types'
 
-export function usePromptTester(
-  promptService: Ref<IPromptService | null>,
-  selectedTestModel: Ref<string>
-) {
+export function usePromptTester(promptService: PromptService | null) {
   const toast = useToast()
-  const { t } = useI18n()
   
-  // States
+  // 状态
   const testContent = ref('')
   const testResult = ref('')
   const testError = ref('')
   const isTesting = ref(false)
+  const selectedModel = ref('')
   
-  // Test prompt
+  // 测试提示词
   const handleTest = async (optimizedPrompt: string) => {
-    if (!promptService.value) {
-      toast.error(t('toast.error.serviceInit'))
+    if (!promptService) {
+      toast.error('服务未初始化，请稍后重试')
       return
     }
     
-    if (!selectedTestModel.value || !testContent.value || !optimizedPrompt) {
-      toast.error(t('toast.error.incompleteTestInfo'))
+    if (!selectedModel.value || !testContent.value || !optimizedPrompt) {
+      toast.error('请填写完整的测试信息')
       return
     }
 
@@ -34,10 +29,10 @@ export function usePromptTester(
     testResult.value = ''
 
     try {
-      await promptService.value.testPromptStream(
+      await promptService.testPromptStream(
         optimizedPrompt,
         testContent.value,
-        selectedTestModel.value,
+        selectedModel.value,
         {
           onToken: (token: string) => {
             testResult.value += token
@@ -46,27 +41,28 @@ export function usePromptTester(
             isTesting.value = false
           },
           onError: (error: Error) => {
-            testError.value = error.message || t('toast.error.testFailed')
+            testError.value = error.message || '测试失败'
             isTesting.value = false
           }
         }
       )
     } catch (error: any) {
-      console.error(t('toast.error.testFailed'), error)
-      testError.value = error.message || t('toast.error.testProcessError')
+      console.error('测试失败:', error)
+      testError.value = error.message || '测试过程中发生错误'
     } finally {
       isTesting.value = false
     }
   }
 
   return {
-    // States
+    // 状态
     testContent,
     testResult,
     testError,
     isTesting,
+    selectedModel,
     
-    // Methods
+    // 方法
     handleTest
   }
 } 
