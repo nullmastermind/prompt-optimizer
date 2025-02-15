@@ -1,10 +1,14 @@
 import { createApp } from 'vue'
-import { installI18n } from '@prompt-optimizer/ui'
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
 import App from './App.vue'
-
 import './style.css'
-import '@prompt-optimizer/ui/dist/style.css' 
 
+// 创建Vue应用
 const app = createApp(App)
-installI18n(app)
-app.mount('#app')
+
+// 使用ElementPlus
+app.use(ElementPlus)
+
+// 挂载应用
+app.mount('#app') 
