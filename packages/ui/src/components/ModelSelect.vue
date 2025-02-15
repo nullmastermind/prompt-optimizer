@@ -2,19 +2,19 @@
   <div class="relative">
     <button
       @click.stop="toggleDropdown"
-      class="theme-template-select-button"
+      class="template-select-button w-full h-10 px-3 bg-black/20 border border-purple-600/50 rounded-lg text-white hover:border-purple-500/70 focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-all"
       :disabled="disabled"
     >
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-2">
-          <span v-if="modelValue && getSelectedModel && getSelectedModel.enabled" class="theme-text text-sm">
+          <span v-if="modelValue && getSelectedModel" class="text-white">
             {{ getSelectedModel.name }}
           </span>
-          <span v-else class="theme-placeholder">
-            {{ !enabledModels.length ? t('model.select.noModels') : t('model.select.placeholder') }}
+          <span v-else class="text-white/50">
+            {{ !models.length ? '请配置模型' : '请选择模型' }}
           </span>
         </div>
-        <span class="theme-text text-sm">
+        <span class="text-purple-300">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
           </svg>
@@ -23,37 +23,42 @@
     </button>
 
     <div v-if="isOpen" 
-         class="theme-dropdown"
+         class="absolute z-50 min-w-[300px] w-max max-w-[90vw] mt-1 bg-gray-800/95 backdrop-blur-sm rounded-lg border border-purple-600/30 shadow-xl"
          :style="dropdownStyle"
          @click.stop
          v-click-outside="() => isOpen = false"
     >
       <div class="p-2 max-h-64 overflow-y-auto">
-        <div v-if="!enabledModels.length" class="theme-dropdown-empty">
-          {{ t('model.select.noAvailableModels') }}
+        <div v-if="!models.length" class="px-3 py-2 text-gray-400 text-sm">
+          暂无可用模型
         </div>
-        <div v-else v-for="model in enabledModels" 
+        <div v-else v-for="model in models" 
              :key="model.key"
              @click="selectModel(model)"
-             class="theme-dropdown-item"
+             class="px-3 py-2 rounded-lg cursor-pointer transition-colors group relative"
              :class="[
                modelValue === model.key
-                 ? 'theme-dropdown-item-active'
-                 : 'theme-dropdown-item-inactive'
+                 ? 'bg-purple-600/30 text-purple-200'
+                 : 'hover:bg-gray-700/50 text-gray-300'
              ]"
         >
           <div class="flex items-center justify-between">
-            <span class="theme-text text-sm">{{ model.name }}</span>
+            <span>{{ model.name }}</span>
+            <span v-if="!isDefaultModel(model.key)" 
+                  class="text-xs px-1.5 py-0.5 rounded bg-purple-600/20 text-purple-300">
+              自定义
+            </span>
           </div>
         </div>
       </div>
-      <div class="theme-dropdown-section">
+      <div class="p-2 border-t border-purple-600/20">
         <button
           @click="$emit('config')"
-          class="theme-dropdown-config-button"
+          class="w-full px-3 py-2 text-sm rounded-lg bg-purple-600/20 text-purple-300 
+                 hover:bg-purple-600/30 transition-colors flex items-center justify-center space-x-1"
         >
           <span>⚙️</span>
-          <span>{{ t('model.select.configure') }}</span>
+          <span>配置模型</span>
         </button>
       </div>
     </div>
@@ -61,16 +66,16 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { modelManager } from '@prompt-optimizer/core'
+import { ref, computed } from 'vue'
 import { clickOutside } from '../directives/clickOutside'
-
-const { t } = useI18n()
 
 const props = defineProps({
   modelValue: {
     type: String,
+    required: true
+  },
+  models: {
+    type: Array,
     required: true
   },
   disabled: {
@@ -82,91 +87,37 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'config'])
 
 const isOpen = ref(false)
-const refreshTrigger = ref(0)
 const vClickOutside = clickOutside
 
-// 响应式数据存储
-const allModels = ref([])
-const enabledModels = ref([])
-
-// 加载模型数据
-const loadModels = async () => {
-  try {
-    allModels.value = await modelManager.getAllModels()
-    enabledModels.value = await modelManager.getEnabledModels()
-  } catch (error) {
-    console.error('Failed to load models:', error)
-    allModels.value = []
-    enabledModels.value = []
-  }
-}
+const dropdownStyle = computed(() => ({
+  minWidth: '100%'
+}))
 
 // 获取选中的模型
 const getSelectedModel = computed(() => {
-  refreshTrigger.value // 触发响应式更新
-  return allModels.value.find(m => m.key === props.modelValue)
+  return props.models.find(m => m.key === props.modelValue)
 })
 
 // 判断是否为默认模型
 const isDefaultModel = (key) => {
-  const model = allModels.value.find(m => m.key === key)
-  return model?.isDefault ?? false
+  return ['openai', 'gemini', 'deepseek'].includes(key)
 }
 
 // 切换下拉框
-const toggleDropdown = async () => {
+const toggleDropdown = () => {
   if (props.disabled) return
   isOpen.value = !isOpen.value
-  if (isOpen.value) {
-    await loadModels()
-    refreshTrigger.value++
-  }
 }
 
 // 选择模型
 const selectModel = (model) => {
   emit('update:modelValue', model.key)
   isOpen.value = false
-  refreshTrigger.value++
 }
-
-// 添加刷新方法
-const refresh = async () => {
-  await loadModels()
-  refreshTrigger.value++
-}
-
-// 暴露方法给父组件
-defineExpose({
-  refresh
-})
-
-// 监听模型数据变化，确保选中的模型仍然可用
-watch(
-  () => props.modelValue,
-  async (newValue) => {
-    if (newValue && !enabledModels.value.find(m => m.key === newValue)) {
-      await loadModels()
-      if (!enabledModels.value.find(m => m.key === newValue)) {
-        emit('update:modelValue', enabledModels.value[0]?.key || '')
-      }
-    }
-  }
-)
-
-// 初始化时加载模型
-onMounted(async () => {
-  await loadModels()
-})
-
-// 计算下拉框样式
-const dropdownStyle = computed(() => ({
-  minWidth: '100%'
-}))
 </script>
 
 <style scoped>
-.theme-template-select-button {
+.template-select-button {
   position: relative;
 }
 </style> 
