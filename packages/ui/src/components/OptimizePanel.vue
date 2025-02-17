@@ -5,12 +5,12 @@
       <InputPanelUI
         v-model="prompt"
         v-model:selectedModel="selectedOptimizeModel"
-        :label="t('promptOptimizer.originalPrompt')"
-        :placeholder="t('promptOptimizer.inputPlaceholder')"
-        :model-label="t('promptOptimizer.optimizeModel')"
-        :template-label="t('promptOptimizer.templateLabel')"
-        :button-text="t('promptOptimizer.optimize')"
-        :loading-text="t('common.loading')"
+        label="原始提示词"
+        placeholder="请输入需要优化的prompt..."
+        model-label="优化模型"
+        template-label="优化提示词"
+        button-text="开始优化 →"
+        loading-text="优化中..."
         :loading="isOptimizing"
         :disabled="isOptimizing"
         @submit="handleOptimizePrompt"
@@ -40,7 +40,6 @@
     <div class="flex-1 min-h-0 overflow-y-auto">
       <PromptPanelUI 
         v-model:optimized-prompt="optimizedPrompt"
-        :original-prompt="prompt"
         :is-iterating="isIterating"
         v-model:selected-iterate-template="selectedIterateTemplate"
         :versions="currentVersions"
@@ -48,7 +47,6 @@
         @iterate="handleIteratePrompt"
         @openTemplateManager="$emit('openTemplateManager', $event)"
         @switchVersion="handleSwitchVersion"
-        @templateSelect="handleTemplateSelect"
       />
     </div>
   </ContentCardUI>
@@ -56,15 +54,12 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { usePromptOptimizer } from '../composables/usePromptOptimizer'
 import ContentCardUI from './ContentCard.vue'
 import InputPanelUI from './InputPanel.vue'
 import ModelSelectUI from './ModelSelect.vue'
 import TemplateSelectUI from './TemplateSelect.vue'
 import PromptPanelUI from './PromptPanel.vue'
-
-const { t } = useI18n()
 
 const props = defineProps({
   modelManager: {

@@ -1,6 +1,5 @@
 import { ref } from 'vue'
 import { useToast } from './useToast'
-import { useI18n } from 'vue-i18n'
 
 export function useModals(
   templateManager: any,
@@ -10,7 +9,6 @@ export function useModals(
   initTemplateSelection: () => Promise<void>
 ) {
   const toast = useToast()
-  const { t } = useI18n()
   
   // 弹窗状态
   const showConfig = ref(false)
@@ -27,11 +25,12 @@ export function useModals(
   // 加载提示词模板
   const loadTemplates = async () => {
     try {
-      await templateManager.ensureInitialized()
+      await templateManager.init()
       await initTemplateSelection()
+      toast.success('提示词列表已更新')
     } catch (error) {
-      console.error(t('toast.error.loadTemplatesFailed'), error)
-      toast.error(t('toast.error.loadTemplatesFailed'))
+      console.error('加载提示词失败:', error)
+      toast.error('加载提示词失败')
     }
   }
 

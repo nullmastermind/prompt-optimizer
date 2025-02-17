@@ -1,12 +1,11 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
-import path from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // 加载环境变量（从项目根目录加载）
-  const env = loadEnv(mode, resolve(process.cwd(), '../../'))
+  // 加载环境变量
+  const env = loadEnv(mode, process.cwd())
   
   return {
     plugins: [vue()],
@@ -16,11 +15,6 @@ export default defineConfig(({ mode }) => {
       fs: {
         // 允许为工作区依赖提供服务
         allow: ['..']
-      },
-      hmr: true,
-      watch: {
-        // 确保监视monorepo中其他包的变化
-        ignored: ['!**/node_modules/@prompt-optimizer/**']
       }
     },
     build: {
@@ -35,15 +29,13 @@ export default defineConfig(({ mode }) => {
       preserveSymlinks: true,
       alias: {
         '@': resolve(__dirname, 'src'),
-        '@prompt-optimizer/core': path.resolve(__dirname, '../core'),
-        '@prompt-optimizer/ui': path.resolve(__dirname, '../ui'),
-        '@prompt-optimizer/web': path.resolve(__dirname, '../web'),
-        '@prompt-optimizer/extension': path.resolve(__dirname, '../extension')
+        '@prompt-optimizer/ui': resolve(__dirname, '../ui'),
+        '@prompt-optimizer/ui/dist/style.css': resolve(__dirname, '../ui/dist/style.css')
       }
     },
     optimizeDeps: {
-      // 预构建依赖
-      include: ['element-plus'],
+      // 包含工作区依赖
+      include: ['@prompt-optimizer/ui', 'element-plus']
     },
     define: {
       'process.env': {
@@ -55,4 +47,4 @@ export default defineConfig(({ mode }) => {
       }
     }
   }
-})
+}) 
