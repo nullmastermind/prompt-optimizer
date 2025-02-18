@@ -1,8 +1,7 @@
 import { ref, onMounted } from 'vue'
 import { useToast } from './useToast'
-import { useI18n } from 'vue-i18n'
 import type { ModelManager, TemplateManager, HistoryManager, PromptService } from '@prompt-optimizer/core'
-import { createLLMService, createPromptService } from '@prompt-optimizer/core'
+import { createLLMService, createPromptService } from '../services'
 
 export function useServiceInitializer(
   modelManager: ModelManager,
@@ -10,37 +9,37 @@ export function useServiceInitializer(
   historyManager: HistoryManager
 ) {
   const toast = useToast()
-  const { t } = useI18n()
   const promptServiceRef = ref<PromptService | null>(null)
   const llmService = createLLMService(modelManager)
 
-  // Initialize base services
-  const initBaseServices = async () => {
+  // 初始化基础服务
+  const initBaseServices = () => {
     try {
-      console.log(t('log.info.initBaseServicesStart'))
+      console.log('开始初始化基础服务...')
+      
+      // 初始化历史记录管理器（同步操作）
+      console.log('初始化历史记录管理器...')
+      historyManager.init()
 
-      // 确保模板管理器已初始化
-      await templateManager.ensureInitialized()
-
-      // Get and verify template list
+      // 获取并验证模板列表
       const templates = templateManager.listTemplates()
-      console.log(t('log.info.templateList'), templates)
+      console.log('模板列表:', templates)
 
-      // Create prompt service
-      console.log(t('log.info.createPromptService'))
+      // 创建提示词服务
+      console.log('创建提示词服务...')
       promptServiceRef.value = createPromptService(modelManager, llmService, templateManager, historyManager)
-
-      console.log(t('log.info.initComplete'))
+      
+      console.log('初始化完成')
     } catch (error) {
-      console.error(t('log.error.initBaseServicesFailed'), error)
-      toast.error(t('toast.error.initFailed', { error: error instanceof Error ? error.message : String(error) }))
+      console.error('初始化基础服务失败:', error)
+      toast.error('初始化失败：' + (error instanceof Error ? error.message : String(error)))
       throw error
     }
   }
 
-  // Auto initialize on mounted
-  onMounted(async () => {
-    await initBaseServices()
+  // 在 mounted 时自动初始化
+  onMounted(() => {
+    initBaseServices()
   })
 
   return {
