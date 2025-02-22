@@ -1,4 +1,4 @@
-import { createLLMService, ModelManager, LocalStorageProvider } from '../../../src/index.js';
+import { createLLMService, ModelManager } from '@prompt-optimizer/core';
 import { expect, describe, it, beforeEach, beforeAll } from 'vitest';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -12,15 +12,13 @@ describe('DeepSeek API 测试', () => {
   // 跳过没有设置 API 密钥的测试
   const apiKey = process.env.VITE_DEEPSEEK_API_KEY;
   if (!apiKey) {
-    console.log('跳过 DeepSeek 测试：未设置 VITE_DEEPSEEK_API_KEY 环境变量');
     it.skip('应该能正确调用 DeepSeek API', () => {});
     it.skip('应该能正确处理多轮对话', () => {});
     return;
   }
 
   it('应该能正确调用 DeepSeek API', async () => {
-    const storage = new LocalStorageProvider();
-    const modelManager = new ModelManager(storage);
+    const modelManager = new ModelManager();
     const llmService = createLLMService(modelManager);
 
     // 更新 DeepSeek 配置
@@ -40,8 +38,7 @@ describe('DeepSeek API 测试', () => {
   }, 25000);
 
   it('应该能正确处理多轮对话', async () => {
-    const storage = new LocalStorageProvider();
-    const modelManager = new ModelManager(storage);
+    const modelManager = new ModelManager();
     const llmService = createLLMService(modelManager);
 
     // 更新 DeepSeek 配置

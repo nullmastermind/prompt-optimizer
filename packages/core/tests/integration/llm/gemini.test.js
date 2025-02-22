@@ -1,4 +1,4 @@
-import { createLLMService, ModelManager, LocalStorageProvider } from '../../../src/index.js';
+import { createLLMService, ModelManager } from '@prompt-optimizer/core';
 import { expect, describe, it, beforeEach, beforeAll } from 'vitest';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -12,40 +12,37 @@ describe('Gemini API 测试', () => {
   // 跳过没有设置 API 密钥的测试
   const apiKey = process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    console.log('跳过 Gemini 测试：未设置 VITE_GEMINI_API_KEY 环境变量');
     it.skip('应该能正确调用 Gemini API', () => {});
     it.skip('应该能正确处理多轮对话', () => {});
     return;
   }
 
   it('应该能正确调用 Gemini API', async () => {
-    const storage = new LocalStorageProvider();
-    const modelManager = new ModelManager(storage);
+    const modelManager = new ModelManager();
     const llmService = createLLMService(modelManager);
 
     // 更新 Gemini 配置
-    await modelManager.updateModel('gemini', {
+    modelManager.updateModel('gemini', {
       apiKey,
       enabled: true
     });
 
     const messages = [
-      { role: 'user', content: '你好，请用一句话介绍你自己' }
+      { role: 'user', content: '你好，我们来玩个游戏' }
     ];
 
     const response = await llmService.sendMessage(messages, 'gemini');
     expect(response).toBeDefined();
     expect(typeof response).toBe('string');
     expect(response.length).toBeGreaterThan(0);
-  }, 10000);
+  });
 
   it('应该能正确处理多轮对话', async () => {
-    const storage = new LocalStorageProvider();
-    const modelManager = new ModelManager(storage);
+    const modelManager = new ModelManager();
     const llmService = createLLMService(modelManager);
 
     // 更新 Gemini 配置
-    await modelManager.updateModel('gemini', {
+    modelManager.updateModel('gemini', {
       apiKey,
       enabled: true
     });
@@ -60,5 +57,5 @@ describe('Gemini API 测试', () => {
     expect(response).toBeDefined();
     expect(typeof response).toBe('string');
     expect(response.length).toBeGreaterThan(0);
-  }, 10000);
+  }, { timeout: 10000 });
 }); 

@@ -6,16 +6,14 @@ import {
   APIError, 
   RequestConfigError,
   Message 
-} from '../../../src/index';
-import { createMockStorage } from '../../mocks/mockStorage';
+} from '@prompt-optimizer/core';
 
 describe('LLMService', () => {
   let service: LLMService;
   let modelManager: ModelManager;
   
   beforeEach(() => {
-    const mockStorage = createMockStorage();
-    modelManager = new ModelManager(mockStorage);
+    modelManager = new ModelManager();
     service = new LLMService(modelManager);
   });
 

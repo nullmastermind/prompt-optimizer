@@ -4,44 +4,29 @@ import {
   APIError,
   RequestConfigError,
   ERROR_MESSAGES
-} from '../../../src/index.js';
-import { expect, describe, it, beforeEach, beforeAll, vi } from 'vitest';
-import dotenv from 'dotenv';
-import path from 'path';
-import { createMockStorage } from '../../mocks/mockStorage';
-
-// 加载环境变量
-beforeAll(() => {
-  dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
-  console.log('环境变量加载状态:', {
-    OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
-    CUSTOM_API_KEY: !!process.env.VITE_CUSTOM_API_KEY,
-    GEMINI_API_KEY: !!process.env.VITE_GEMINI_API_KEY,
-    DEEPSEEK_API_KEY: !!process.env.VITE_DEEPSEEK_API_KEY
-  });
-});
+} from '@prompt-optimizer/core';
+import { expect, describe, it, beforeEach } from 'vitest';
 
 describe('LLM 服务通用测试', () => {
   let llmService;
   let modelManager;
-  let mockStorage;
 
   beforeEach(() => {
-    mockStorage = createMockStorage();
-    mockStorage.getItem.mockResolvedValue(null);
-    
-    modelManager = new ModelManager(mockStorage);
+    modelManager = new ModelManager();
+    // 清除所有已有模型
+    const models = modelManager.getAllModels();
+    models.forEach(model => {
+      if (model.key) {
+        modelManager.deleteModel(model.key);
+      }
+    });
     llmService = createLLMService(modelManager);
-    
-    // 模拟getAllModels方法
-    vi.spyOn(modelManager, 'getAllModels').mockResolvedValue([]);
   });
 
   describe('API 调用错误处理', () => {
     it('应该能正确处理无效的消息格式', async () => {
       const testModel = 'test-invalid-message';
-      
-      vi.spyOn(modelManager, 'getModel').mockResolvedValue({
+      modelManager.addModel(testModel, {
         name: 'Test Model',
         baseURL: 'https://test.api/chat/completions',
         models: ['test-model'],
@@ -60,8 +45,7 @@ describe('LLM 服务通用测试', () => {
 
     it('应该能正确处理未启用的模型', async () => {
       const testModel = 'test-disabled';
-      
-      vi.spyOn(modelManager, 'getModel').mockResolvedValue({
+      modelManager.addModel(testModel, {
         name: 'Test Model',
         baseURL: 'https://test.api/chat/completions',
         models: ['test-model'],
@@ -82,8 +66,7 @@ describe('LLM 服务通用测试', () => {
 
     it('应该能正确处理空消息列表', async () => {
       const testModel = 'test-empty-messages';
-      
-      vi.spyOn(modelManager, 'getModel').mockResolvedValue({
+      modelManager.addModel(testModel, {
         name: 'Test Model',
         baseURL: 'https://test.api/chat/completions',
         models: ['test-model'],
@@ -100,7 +83,7 @@ describe('LLM 服务通用测试', () => {
   });
 
   describe('配置管理', () => {
-    it('应该能正确处理模型配置更新', async () => {
+    it('应该能正确处理模型配置更新', () => {
       const testModel = 'test-update';
       const config = {
         name: 'Test Model',
@@ -112,38 +95,16 @@ describe('LLM 服务通用测试', () => {
         provider: 'openai'
       };
 
-      vi.spyOn(modelManager, 'getModel').mockImplementation(async (key) => {
-        if (key === testModel) {
-          return config;
-        }
-        return undefined;
-      });
-      
-      vi.spyOn(modelManager, 'updateModel').mockResolvedValue(undefined);
-      
+      modelManager.addModel(testModel, config);
+      expect(modelManager.getModel(testModel)).toBeDefined();
+
       const newConfig = {
         name: 'Updated Model',
         baseURL: 'https://updated.api/chat/completions'
       };
 
-      // 修改模拟返回值以处理updateModel后的情况
-      vi.spyOn(modelManager, 'getModel').mockImplementation(async (key) => {
-        if (key === testModel) {
-          return {
-            ...config,
-            ...newConfig
-          };
-        }
-        return undefined;
-      });
-      
-      // 添加await确保异步断言正确执行
-      await expect(modelManager.getModel(testModel)).resolves.toBeDefined();
-
-      await modelManager.updateModel(testModel, newConfig);
-      const updatedModel = await modelManager.getModel(testModel);
-      
-      // 使用标准断言而不是异步断言
+      modelManager.updateModel(testModel, newConfig);
+      const updatedModel = modelManager.getModel(testModel);
       expect(updatedModel.name).toBe(newConfig.name);
       expect(updatedModel.baseURL).toBe(newConfig.baseURL);
       expect(updatedModel.models).toEqual(config.models);
@@ -151,7 +112,7 @@ describe('LLM 服务通用测试', () => {
       expect(updatedModel.enabled).toBe(config.enabled);
     });
 
-    it('应该能正确处理模型的启用和禁用', async () => {
+    it('应该能正确处理模型的启用和禁用', () => {
       const testModel = 'test-enable-disable';
       const config = {
         name: 'Test Model',
@@ -163,23 +124,15 @@ describe('LLM 服务通用测试', () => {
         provider: 'openai'
       };
 
-      // 初始状态为启用
-      vi.spyOn(modelManager, 'getModel').mockResolvedValue(config);
-      
-      const model = await modelManager.getModel(testModel);
+      modelManager.addModel(testModel, config);
+      const model = modelManager.getModel(testModel);
       expect(model.enabled).toBe(true);
 
-      // 禁用后的状态
-      vi.spyOn(modelManager, 'getModel').mockResolvedValue({...config, enabled: false});
-      vi.spyOn(modelManager, 'updateModel').mockResolvedValue(undefined);
-      
-      await modelManager.updateModel(testModel, { enabled: false });
-      expect((await modelManager.getModel(testModel)).enabled).toBe(false);
+      modelManager.updateModel(testModel, { enabled: false });
+      expect(modelManager.getModel(testModel).enabled).toBe(false);
 
-      // 重新启用
-      vi.spyOn(modelManager, 'getModel').mockResolvedValue({...config, enabled: true});
-      await modelManager.updateModel(testModel, { enabled: true });
-      expect((await modelManager.getModel(testModel)).enabled).toBe(true);
+      modelManager.updateModel(testModel, { enabled: true });
+      expect(modelManager.getModel(testModel).enabled).toBe(true);
     });
   });
 }); 
