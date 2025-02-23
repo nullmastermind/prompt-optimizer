@@ -340,40 +340,10 @@
 ### 4.4 模型管理流程
 
 1. **模型配置管理**
-   - 模型配置更新: 用户可以更新模型的名称、基础URL、API密钥、可用模型列表、默认模型以及是否启用。
-   - **高级LLM参数 (`llmParams`)**:
-     - `ModelConfig` 接口包含一个 `llmParams?: Record<string, any>;` 字段。
-     - 此字段允许用户为每个模型配置提供一个灵活的键值对映射，用于指定特定于该LLM提供商SDK的参数。
-     - 用户可以添加其LLM SDK支持的任何参数。
-     - **示例**:
-       - **OpenAI/OpenAI兼容API (如 DeepSeek, Zhipu):**
-         ```json
-         "llmParams": {
-           "temperature": 0.7,
-           "max_tokens": 4096,
-           "timeout": 60000, // 用于OpenAI客户端的请求超时 (毫秒)
-           "top_p": 0.9,
-           "frequency_penalty": 0.5
-           // ... 其他OpenAI支持的参数
-         }
-         ```
-       - **Gemini:**
-         ```json
-         "llmParams": {
-           "temperature": 0.8,
-           "maxOutputTokens": 2048, // 注意: Gemini使用maxOutputTokens
-           "topP": 0.95,
-           "topK": 40
-           // ... 其他Gemini支持的参数
-         }
-         ```
-     - **`LLMService` 如何处理 `llmParams`**:
-       - 对于OpenAI兼容的API, `timeout` 值（如果提供）用于配置OpenAI JavaScript SDK客户端实例的超时设置。其余参数（如 `temperature`, `max_tokens`, `top_p` 等）会直接传递给 `chat.completions.create()` 方法。
-       - 对于Gemini, `temperature`, `maxOutputTokens`, `topP`, `topK` 等参数会包含在传递给 `model.startChat()` 的 `generationConfig` 对象中。
-       - 未被服务明确处理的参数（即非 `timeout` for OpenAI, 或非已知Gemini参数）通常会被安全地传递给相应SDK的请求中，如果SDK支持它们。
-   - 连接测试: 验证API密钥和基础URL是否正确，以及模型是否可用。
-   - 配置验证: 确保所有必填字段都已填写，并且格式正确。`llmParams` 字段（如果提供）必须是一个对象。
-   - 错误处理: 在配置不正确或连接失败时提供明确的错误信息。
+   - 模型配置更新
+   - 连接测试
+   - 配置验证
+   - 错误处理
 
 2. **API密钥管理**
    - 密钥设置与加密
@@ -494,53 +464,4 @@
   - iOS Safari >= 14
   - Android Chrome >= 90
 
-## 跨域代理解决方案
-
-为了解决在纯前端应用中调用第三方LLM API时可能遇到的跨域问题，我们实现了一个基于Vercel Edge Runtime的代理解决方案。
-
-### 代理架构
-
-1. **API代理**：用于处理普通请求
-   - 路径：`/api/proxy`
-   - 功能：转发普通HTTP请求，处理CORS头
-
-2. **流式代理**：用于处理流式请求
-   - 路径：`/api/stream`
-   - 功能：转发流式响应，保持连接直到流结束
-
-### 工作原理
-
-1. 在生产环境中（非localhost），系统会自动检测是否需要使用代理
-2. 所有API请求（包括OpenAI）都可以使用代理，通过模型配置中的`useVercelProxy`选项控制
-3. 代理会保留原始请求的所有头信息和请求体
-4. 代理会添加必要的CORS头，允许浏览器接收响应
-
-### 代码实现
-
-核心代理逻辑位于：
-- `/api/proxy.js`：处理普通请求
-- `/api/stream.js`：处理流式请求
-
-环境检测逻辑位于：
-- `packages/core/src/utils/environment.ts`
-
-### 使用方式
-
-对于开发者来说，这个功能是透明的，不需要额外配置。系统会自动检测Vercel环境并在模型配置中提供代理选项。
-
-在模型配置界面中，当检测到Vercel环境时，会显示"使用Vercel代理"的选项。您可以为每个模型单独配置是否启用代理功能。
-
-
-### 安全考虑
-
-1. 代理仅转发请求，不存储任何数据
-2. API密钥仍然由客户端直接发送，不经过中间服务器处理
-3. 所有请求都通过HTTPS加密传输
-
-### 限制
-
-1. Vercel Edge Functions有30秒的超时限制
-2. 有每月带宽和请求数量限制
-3. 首次请求可能有冷启动延迟
-
-最后更新：2025-01-06
+最后更新：2024-03-02 
