@@ -51,7 +51,7 @@ docker build -t linshen/prompt-optimizer:$VERSION .
 docker tag linshen/prompt-optimizer:$VERSION linshen/prompt-optimizer:latest
 
 # 运行容器
-docker run -d -p 80:80 --restart unless-stopped --name prompt-optimizer -e ACCESS_PASSWORD=1234!@#$  linshen/prompt-optimizer:$VERSION
+docker run -d -p 80:80 --restart unless-stopped --name prompt-optimizer linshen/prompt-optimizer
 
 
 # 推送
@@ -59,15 +59,6 @@ docker push linshen/prompt-optimizer:$VERSION
 docker push linshen/prompt-optimizer:latest
 
 ```
-
-docker本地构建测试
-```shell
-docker build -t linshen/prompt-optimizer:test .
-docker rm -f prompt-optimizer
-docker run -d -p 80:80 --restart unless-stopped --name prompt-optimizer -e VITE_GEMINI_API_KEY=111 linshen/prompt-optimizer:test
-
-```
-
 
 ### 多阶段构建说明
 
@@ -143,6 +134,30 @@ pnpm build:core
 pnpm build:ui
 pnpm build:web
 pnpm build:ext
+```
+
+### CI/CD集成
+
+```yaml
+# GitHub Actions示例
+name: Docker Build and Push
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        push: true
+        tags: prompt-optimizer:latest
 ```
 
 ### 常用Docker命令
