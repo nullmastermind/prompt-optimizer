@@ -4,7 +4,6 @@ interface Window {
     GEMINI_API_KEY?: string;
     DEEPSEEK_API_KEY?: string;
     SILICONFLOW_API_KEY?: string;
-    ZHIPU_API_KEY?: string;
     CUSTOM_API_KEY?: string;
     CUSTOM_API_BASE_URL?: string;
     CUSTOM_API_MODEL?: string;
