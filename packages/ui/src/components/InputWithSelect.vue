@@ -1,10 +1,9 @@
 <template>
-  <div ref="componentRef" class="relative">
+  <div class="relative">
     <div class="flex">
       <input
-        ref="inputRef"
         :value="modelValue"
-        @input="handleInput"
+        @input="$emit('update:modelValue', $event.target.value)"
         :type="type"
         :required="required"
         :placeholder="placeholder"
@@ -54,12 +53,12 @@
       <div v-if="isLoading" class="p-2 text-center theme-manager-text-secondary">
         {{ loadingText }}
       </div>
-      <div v-else-if="filteredOptions.length === 0" class="p-2 text-center theme-manager-text-secondary">
+      <div v-else-if="options.length === 0" class="p-2 text-center theme-manager-text-secondary">
         {{ noOptionsText }}
       </div>
       <ul v-else class="py-1">
         <li
-          v-for="option in filteredOptions"
+          v-for="option in options"
           :key="option.value"
           @click="selectOption(option)"
           :class="[
@@ -75,7 +74,7 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits, onMounted, onUnmounted, computed } from 'vue';
+import { ref, defineProps, defineEmits, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
   modelValue: {
@@ -127,38 +126,14 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'select', 'fetchOptions']);
 
 const isOpen = ref(false);
-const inputRef = ref(null);
-const searchText = ref('');
-
-// 根据输入内容筛选选项
-const filteredOptions = computed(() => {
-  if (!searchText.value) return props.options;
-  return props.options.filter(option => 
-    option.label.toLowerCase().includes(searchText.value.toLowerCase()) ||
-    option.value.toLowerCase().includes(searchText.value.toLowerCase())
-  );
-});
-
-// 处理输入事件
-const handleInput = (event) => {
-  const value = event.target.value;
-  emit('update:modelValue', value);
-  searchText.value = value;
-};
 
 // Toggle dropdown visibility
 const toggleDropdown = async () => {
   isOpen.value = !isOpen.value;
   
-  // 如果打开下拉菜单，聚焦到输入框
+  // If dropdown is being opened and we have a fetch function, call it
   if (isOpen.value) {
     emit('fetchOptions');
-    // 等待DOM更新后聚焦
-    setTimeout(() => {
-      if (inputRef.value) {
-        inputRef.value.focus();
-      }
-    }, 10);
   }
 };
 
@@ -167,39 +142,25 @@ const selectOption = (option) => {
   emit('update:modelValue', option.value);
   emit('select', option);
   isOpen.value = false;
-  searchText.value = '';
 };
 
 // Close dropdown when clicking outside
 const handleClickOutside = (event) => {
-  console.log('Click detected', {
-    isOpen: isOpen.value,
-    isComponent: componentRef.value && componentRef.value.contains(event.target),
-    target: event.target
-  });
-  
-  // 只有在下拉菜单打开且点击的是组件外部时才关闭下拉菜单
-  if (isOpen.value && componentRef.value && !componentRef.value.contains(event.target)) {
-    console.log('Closing dropdown');
+  if (isOpen.value && !event.target.closest('.relative')) {
     isOpen.value = false;
-    searchText.value = '';
   }
 };
-
-// 组件引用
-const componentRef = ref(null);
 
 // Add and remove event listener
 onMounted(() => {
   if (typeof document !== 'undefined') {
-    // 使用捕获阶段以确保事件能够被正确捕获
-    document.addEventListener('mousedown', handleClickOutside, true);
+    document.addEventListener('click', handleClickOutside);
   }
 });
 
 onUnmounted(() => {
   if (typeof document !== 'undefined') {
-    document.removeEventListener('mousedown', handleClickOutside, true);
+    document.removeEventListener('click', handleClickOutside);
   }
 });
 </script>
