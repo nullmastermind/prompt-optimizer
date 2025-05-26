@@ -53,14 +53,14 @@ export class StorageFactory {
     try {
       // 检查是否支持 IndexedDB (Dexie 的基础)
       if (typeof window !== 'undefined' && window.indexedDB) {
-        console.log('Using Dexie as default storage provider');
+        console.log('使用 Dexie 作为默认存储提供器');
         StorageFactory.defaultInstance = StorageFactory.create('dexie');
       } else {
-        console.log('IndexedDB not available, using localStorage as default storage provider');
+        console.log('IndexedDB 不可用，使用 localStorage 作为默认存储提供器');
         StorageFactory.defaultInstance = StorageFactory.create('localStorage');
       }
     } catch (error) {
-      console.warn('Dexie storage unavailable, falling back to localStorage:', error);
+      console.warn('Dexie 存储不可用，降级到 localStorage:', error);
       StorageFactory.defaultInstance = StorageFactory.create('localStorage');
     }
 

@@ -42,7 +42,7 @@ export class DexieStorageProvider implements IStorageProvider {
   
   // 全局静态迁移状态，防止多个实例重复迁移
   private static globalMigrationCompleted = false;
-  private static migrationLock = Promise.resolve();
+  private static migrationPromise: Promise<void> | null = null;
   
   // 用于原子操作的锁机制
   private keyLocks = new Map<string, Promise<void>>();
@@ -62,7 +62,7 @@ export class DexieStorageProvider implements IStorageProvider {
       await this.migrateFromLocalStorage();
       this.migrated = true;
     } catch (error) {
-      console.error('Dexie storage initialization failed:', error);
+      console.error('Dexie存储初始化失败:', error);
       throw error;
     }
   }
@@ -71,30 +71,29 @@ export class DexieStorageProvider implements IStorageProvider {
    * 从 localStorage 迁移数据到 Dexie
    */
   private async migrateFromLocalStorage(): Promise<void> {
-    // 使用原子锁确保迁移的线程安全
-    DexieStorageProvider.migrationLock = DexieStorageProvider.migrationLock.then(async () => {
-      // 如果全局迁移已完成，直接返回
-      if (DexieStorageProvider.globalMigrationCompleted) {
-        console.log('全局迁移已完成，跳过重复迁移');
-        return;
-      }
+    // 如果全局迁移已完成，直接返回
+    if (DexieStorageProvider.globalMigrationCompleted) {
+      console.log('全局迁移已完成，跳过重复迁移');
+      return;
+    }
 
-      try {
-        await this.performMigration();
-        DexieStorageProvider.globalMigrationCompleted = true;
-        console.log('数据迁移成功完成');
-      } catch (error) {
-        console.error('数据迁移失败:', error);
-        // 迁移失败时重置状态，允许重试
-        DexieStorageProvider.globalMigrationCompleted = false;
-        throw error;
-      }
-    });
+    // 如果正在迁移中，等待完成
+    if (DexieStorageProvider.migrationPromise) {
+      console.log('等待正在进行的迁移完成...');
+      await DexieStorageProvider.migrationPromise;
+      return;
+    }
+
+    // 开始迁移，设置Promise
+    DexieStorageProvider.migrationPromise = this.performMigration();
     
-    await DexieStorageProvider.migrationLock;
+    try {
+      await DexieStorageProvider.migrationPromise;
+      DexieStorageProvider.globalMigrationCompleted = true;
+    } finally {
+      DexieStorageProvider.migrationPromise = null;
+    }
   }
-
-
 
   /**
    * 执行实际的迁移操作
@@ -188,7 +187,7 @@ export class DexieStorageProvider implements IStorageProvider {
    */
   static resetMigrationState(): void {
     DexieStorageProvider.globalMigrationCompleted = false;
-    DexieStorageProvider.migrationLock = Promise.resolve();
+    DexieStorageProvider.migrationPromise = null;
     
     // 清除localStorage中的迁移标志
     if (typeof window !== 'undefined' && window.localStorage) {

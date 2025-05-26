@@ -96,41 +96,25 @@ export class StorageAdapter implements IStorageProvider {
   }
 
   /**
-   * 改进的异步锁实现
-   * 使用队列机制避免死锁和锁泄漏
+   * 简单的异步锁实现
    */
   private async acquireLock(key: string): Promise<() => void> {
-    // 如果已有锁，等待它完成
-    const existingLock = this.locks.get(key);
-    if (existingLock) {
+    // 等待现有锁完成
+    while (this.locks.has(key)) {
       try {
-        await existingLock;
+        await this.locks.get(key);
       } catch (error) {
-        // 忽略前一个操作的错误，继续获取锁
+        // 忽略锁释放错误，继续尝试获取锁
       }
     }
 
     // 创建新锁
     let releaseLock: () => void;
-    const lockPromise = new Promise<void>((resolve, reject) => {
-      let released = false;
-      
+    const lockPromise = new Promise<void>((resolve) => {
       releaseLock = () => {
-        if (!released) {
-          released = true;
-          this.locks.delete(key);
-          resolve();
-        }
+        this.locks.delete(key);
+        resolve();
       };
-      
-      // 设置超时防止死锁
-      setTimeout(() => {
-        if (!released) {
-          released = true;
-          this.locks.delete(key);
-          reject(new Error(`Lock timeout for key: ${key}`));
-        }
-      }, 30000); // 30秒超时
     });
     
     this.locks.set(key, lockPromise);
