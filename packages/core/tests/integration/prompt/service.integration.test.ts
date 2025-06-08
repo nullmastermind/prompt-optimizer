@@ -199,7 +199,7 @@ describe('PromptService Integration Tests', () => {
       await promptService.optimizePromptStream(
         'Write a simple greeting',
         'test-gemini',
-        'general-optimize',
+        'You are a helpful assistant.',
         {
           onToken: (token) => tokens.push(token),
           onComplete: () => { completed = true; },
@@ -219,6 +219,19 @@ describe('PromptService Integration Tests', () => {
       const tokens: string[] = [];
       let completed = false;
 
+      const templateObj = {
+        content: [
+          {
+            role: 'system',
+            content: 'You are an optimizer.'
+          },
+          {
+            role: 'user',
+            content: 'Original: {{originalPrompt}}, Request: {{iterateInput}}'
+          }
+        ] as MessageTemplate[]
+      };
+
       await promptService.iteratePromptStream(
         'Write a simple greeting',
         'Hello world',
@@ -229,7 +242,7 @@ describe('PromptService Integration Tests', () => {
           onComplete: () => { completed = true; },
           onError: (error) => { throw error; }
         },
-        'iterate'
+        templateObj
       );
 
       expect(tokens.length).toBeGreaterThan(0);
@@ -254,7 +267,7 @@ describe('PromptService Integration Tests', () => {
 
       await expect(
         promptService.optimizePrompt('Test prompt', 'test-gemini')
-      ).rejects.toThrow(/Template not found/);
+      ).rejects.toThrow('优化失败: Template not found');
 
       // 恢复spy
       getTemplateSpy.mockRestore();
@@ -276,7 +289,7 @@ describe('PromptService Integration Tests', () => {
 
       await expect(
         promptService.optimizePrompt('Test prompt', 'test-gemini')
-      ).rejects.toThrow(/Template not found or invalid/);
+      ).rejects.toThrow('优化失败: 提示词不存在或无效');
 
       // 恢复spy
       getTemplateSpy.mockRestore();
