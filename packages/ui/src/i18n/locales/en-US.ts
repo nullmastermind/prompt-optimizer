@@ -58,6 +58,7 @@ export default {
     title: 'Prompt Optimizer',
     inputPlaceholder: 'Enter your prompt to optimize...',
     optimize: 'Optimize →',
+    add: 'Add',
     history: 'History',
     save: 'Save Prompt',
     share: 'Share',
@@ -448,12 +449,14 @@ export default {
       noDefaultTemplate: 'Failed to load default template',
       optimizeProcessFailed: 'Error in optimization process',
       testProcessError: 'Error occurred during test process',
-      initTemplateFailed: 'Failed to initialize template selection'
+      initTemplateFailed: 'Failed to initialize template selection',
+      addPromptFailed: 'Failed to add prompt'
     },
     success: {
       optimizeSuccess: 'Optimization successful',
       iterateComplete: 'Iteration optimization completed',
       iterateSuccess: 'Iteration optimization successful',
+      promptAdded: 'Prompt added as version',
       modelSelected: 'Model selected: {name}',
       templateSelected: '{type} template selected: {name}',
       historyClear: 'History cleared',

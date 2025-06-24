@@ -210,6 +210,42 @@ export function usePromptOptimizer(
     optimizedPrompt.value = version.optimizedPrompt;
     currentVersionId.value = version.id;
   }
+
+  // 直接添加提示词作为版本
+  const handleAddPrompt = async () => {
+    if (!prompt.value.trim()) return
+    if (!promptService.value) {
+      toast.error(t('toast.error.serviceInit'))
+      return
+    }
+
+    try {
+      // 创建新的记录链，直接将当前提示词作为版本
+      const newChain = await historyManager.createNewChain({
+        id: uuidv4(),
+        originalPrompt: prompt.value,
+        optimizedPrompt: prompt.value, // 直接使用原始提示词作为优化结果
+        type: 'optimize',
+        timestamp: Date.now(),
+        modelKey: optimizeModel.value || 'direct-add', // 使用当前选择的模型或标记为直接添加
+        templateId: 'direct-add', // 标记为直接添加
+        metadata: {
+          optimizationMode: optimizationMode.value
+        }
+      })
+
+      // 更新当前状态
+      currentChainId.value = newChain.chainId
+      currentVersions.value = newChain.versions
+      currentVersionId.value = newChain.currentRecord.id
+      optimizedPrompt.value = prompt.value
+
+      toast.success(t('toast.success.promptAdded'))
+    } catch (error) {
+      console.error('添加提示词失败:', error)
+      toast.error(t('toast.error.addPromptFailed'))
+    }
+  }
   
   // 初始化提示词选择
   const initTemplateSelection = async () => {
@@ -507,6 +543,7 @@ export function usePromptOptimizer(
 
     // 方法
     handleOptimizePrompt,
+    handleAddPrompt,
     handleIteratePrompt,
     handleSwitchVersion,
     initTemplateSelection

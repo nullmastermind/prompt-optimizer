@@ -58,6 +58,7 @@
           :loading="isOptimizing"
           :disabled="isOptimizing"
           @submit="handleOptimizePrompt"
+          @add="handleAddPrompt"
           @configModel="showConfig = true"
         >
           <template #optimization-mode-selector>
@@ -262,6 +263,7 @@ const {
   currentVersionId,
   currentChainId,
   handleOptimizePrompt,
+  handleAddPrompt,
   handleIteratePrompt,
   handleSwitchVersion
 } = usePromptOptimizer(

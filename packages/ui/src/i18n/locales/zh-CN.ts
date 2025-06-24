@@ -58,6 +58,7 @@ export default {
     title: '提示词优化器',
     inputPlaceholder: '请输入需要优化的prompt...',
     optimize: '开始优化 →',
+    add: '添加',
     history: '历史记录',
     save: '保存提示词',
     share: '分享',
@@ -448,12 +449,14 @@ export default {
       noDefaultTemplate: '无法加载默认提示词',
       optimizeProcessFailed: '优化过程出错',
       testProcessError: '测试过程中发生错误',
-      initTemplateFailed: '初始化模板选择失败'
+      initTemplateFailed: '初始化模板选择失败',
+      addPromptFailed: '添加提示词失败'
     },
     success: {
       optimizeSuccess: '优化成功',
       iterateComplete: '迭代优化完成',
       iterateSuccess: '迭代优化成功',
+      promptAdded: '提示词已添加为版本',
       modelSelected: '已选择模型: {name}',
       templateSelected: '已选择{type}提示词: {name}',
       historyClear: '历史记录已清空',
