@@ -58,6 +58,7 @@ export default {
     title: 'Prompt Optimizer',
     inputPlaceholder: 'Enter your prompt to optimize...',
     optimize: 'Optimize →',
+    add: 'Add',
     history: 'History',
     save: 'Save Prompt',
     share: 'Share',
@@ -386,6 +387,12 @@ export default {
     confirmOptimize: 'Confirm Optimize',
     iterateTitle: 'Iteration Template',
     selectIterateTemplate: 'Please select iteration template:',
+    diff: {
+      compare: 'Compare with Previous',
+      exit: 'Exit Compare',
+      enable: 'Enable text comparison',
+      disable: 'Disable text comparison'
+    },
     error: {
       noTemplate: 'Please select an iteration template first'
     }
@@ -420,7 +427,10 @@ export default {
     error: {
       serviceInit: 'Service not initialized, please try again later',
       optimizeFailed: 'Optimization failed',
-      iterateFailed: 'Iteration optimization failed',
+      iterateFailed: 'Iteration failed',
+      compareFailed: 'Comparison analysis failed',
+      noVersionsToCompare: 'Not enough versions to compare',
+      noPreviousVersion: 'No previous version available for comparison',
       testFailed: 'Test failed',
       testError: 'Error occurred during test',
       loadTemplatesFailed: 'Failed to load templates',
@@ -439,16 +449,20 @@ export default {
       noDefaultTemplate: 'Failed to load default template',
       optimizeProcessFailed: 'Error in optimization process',
       testProcessError: 'Error occurred during test process',
-      initTemplateFailed: 'Failed to initialize template selection'
+      initTemplateFailed: 'Failed to initialize template selection',
+      addPromptFailed: 'Failed to add prompt'
     },
     success: {
       optimizeSuccess: 'Optimization successful',
-      iterateComplete: 'Iteration completed',
+      iterateComplete: 'Iteration optimization completed',
       iterateSuccess: 'Iteration optimization successful',
+      promptAdded: 'Prompt added as version',
       modelSelected: 'Model selected: {name}',
       templateSelected: '{type} template selected: {name}',
       historyClear: 'History cleared',
-      historyChainDeleted: 'History record deleted'
+      historyChainDeleted: 'History record deleted',
+      exitCompare: 'Exited compare mode',
+      compareEnabled: 'Compare mode enabled'
     },
     warn: {
       loadOptimizeTemplateFailed: 'Failed to load saved optimization template',

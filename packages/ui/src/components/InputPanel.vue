@@ -36,7 +36,7 @@
         <label class="block text-sm theme-label mb-1.5">{{ modelLabel }}</label>
         <slot name="model-select"></slot>
       </div>
-      
+
       <!-- 提示词模板选择 -->
       <div v-if="templateLabel" class="flex-1 min-w-0">
         <label class="block text-sm theme-label mb-1.5 truncate">{{ templateLabel }}</label>
@@ -46,20 +46,36 @@
       <!-- 控制按钮组插槽 -->
       <slot name="control-buttons"></slot>
 
-      <!-- 提交按钮 -->
-      <div class="min-w-[60px]">
-        <div class="h-[20px] mb-1.5"><!-- 占位，与其他元素对齐 --></div>
-        <button
-          @click="$emit('submit')"
-          :disabled="loading || disabled || !modelValue.trim()"
-          class="w-full h-10 theme-button-primary flex items-center truncate justify-center space-x-1"
-        >
-          <span>{{ loading ? loadingText : buttonText }}</span>
-        </button>
+      <!-- 提交按钮组 -->
+      <div class="flex gap-2">
+        <!-- 优化按钮 -->
+        <div class="min-w-[60px]">
+          <div class="h-[20px] mb-1.5"><!-- 占位，与其他元素对齐 --></div>
+          <button
+            @click="$emit('submit')"
+            :disabled="loading || disabled || !modelValue.trim()"
+            class="w-full h-10 theme-button-primary flex items-center truncate justify-center space-x-1"
+          >
+            <span>{{ loading ? loadingText : buttonText }}</span>
+          </button>
+        </div>
+
+        <!-- 添加按钮 -->
+        <div class="min-w-[50px]">
+          <div class="h-[20px] mb-1.5"><!-- 占位，与其他元素对齐 --></div>
+          <button
+            @click="$emit('add')"
+            :disabled="loading || disabled || !modelValue.trim()"
+            class="w-full h-10 theme-button-secondary flex items-center truncate justify-center space-x-1"
+            :title="$t('promptOptimizer.add')"
+          >
+            <span>{{ $t('promptOptimizer.add') }}</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
-  
+
   <!-- 全屏弹窗 -->
   <FullscreenDialog v-model="isFullscreen" :title="label">
     <div class="h-full flex flex-col">
@@ -123,7 +139,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'update:selectedModel', 'submit', 'configModel'])
+const emit = defineEmits(['update:modelValue', 'update:selectedModel', 'submit', 'add', 'configModel'])
 
 // 使用全屏组合函数
 const { isFullscreen, fullscreenValue, openFullscreen } = useFullscreen(

@@ -58,6 +58,7 @@ export default {
     title: '提示词优化器',
     inputPlaceholder: '请输入需要优化的prompt...',
     optimize: '开始优化 →',
+    add: '添加',
     history: '历史记录',
     save: '保存提示词',
     share: '分享',
@@ -386,6 +387,12 @@ export default {
     confirmOptimize: '确认优化',
     iterateTitle: '迭代功能提示词',
     selectIterateTemplate: '请选择迭代提示词：',
+    diff: {
+      compare: '与上版对比',
+      exit: '退出对比',
+      enable: '启用文本对比',
+      disable: '关闭文本对比'
+    },
     error: {
       noTemplate: '请先选择迭代提示词'
     }
@@ -420,7 +427,10 @@ export default {
     error: {
       serviceInit: '服务未初始化，请稍后重试',
       optimizeFailed: '优化失败',
-      iterateFailed: '迭代优化失败',
+      iterateFailed: '迭代失败',
+      compareFailed: '对比分析失败',
+      noVersionsToCompare: '没有足够的版本进行对比',
+      noPreviousVersion: '没有前一版本可供对比',
       testFailed: '测试失败',
       testError: '测试过程中发生错误',
       loadTemplatesFailed: '加载提示词失败',
@@ -439,16 +449,20 @@ export default {
       noDefaultTemplate: '无法加载默认提示词',
       optimizeProcessFailed: '优化过程出错',
       testProcessError: '测试过程中发生错误',
-      initTemplateFailed: '初始化模板选择失败'
+      initTemplateFailed: '初始化模板选择失败',
+      addPromptFailed: '添加提示词失败'
     },
     success: {
       optimizeSuccess: '优化成功',
-      iterateComplete: '迭代完成',
+      iterateComplete: '迭代优化完成',
       iterateSuccess: '迭代优化成功',
+      promptAdded: '提示词已添加为版本',
       modelSelected: '已选择模型: {name}',
       templateSelected: '已选择{type}提示词: {name}',
       historyClear: '历史记录已清空',
-      historyChainDeleted: '历史记录已删除'
+      historyChainDeleted: '历史记录已删除',
+      exitCompare: '已退出对比模式',
+      compareEnabled: '对比模式已启用'
     },
     warn: {
       loadOptimizeTemplateFailed: '加载已保存的优化提示词失败',
