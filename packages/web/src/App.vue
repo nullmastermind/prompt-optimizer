@@ -57,7 +57,7 @@
           :loading-text="$t('common.loading')"
           :loading="isOptimizing"
           :disabled="isOptimizing"
-          @submit="handleOptimizePrompt"
+          @submit="handleOptimizePromptWithClear"
           @add="handleAddPrompt"
           @configModel="showConfig = true"
         >
@@ -78,6 +78,7 @@
           </template>
           <template #template-select>
             <TemplateSelectUI
+              ref="templateSelectRef"
               v-model="currentSelectedTemplate"
               :type="selectedOptimizationMode === 'system' ? 'optimize' : 'userOptimize'"
               :optimization-mode="selectedOptimizationMode"
@@ -90,7 +91,9 @@
       <!-- 优化结果区域 -->
       <div class="flex-1 min-h-0">
         <PromptPanelUI
+          ref="promptPanelRef"
           v-model:optimized-prompt="optimizedPrompt"
+          :reasoning="optimizedReasoning"
           :original-prompt="prompt"
           :is-optimizing="isOptimizing"
           :is-iterating="isIterating"
@@ -195,6 +198,9 @@ import {
   type OptimizationMode
 } from '@prompt-optimizer/ui'
 
+// Ref to PromptPanel component
+const promptPanelRef = ref<InstanceType<typeof PromptPanelUI> | null>(null)
+
 // 初始化主题
 onMounted(() => {
   // 检查本地存储的主题偏好
@@ -254,6 +260,7 @@ const {
 const {
   prompt,
   optimizedPrompt,
+  optimizedReasoning,
   isOptimizing,
   isIterating,
   selectedOptimizeTemplate,
@@ -275,6 +282,16 @@ const {
   selectedOptimizeModel,
   selectedTestModel
 )
+
+// Wrapper function to clear iterate input when starting new optimization
+const handleOptimizePromptWithClear = async () => {
+  // Clear iterate input when starting new optimization from scratch
+  if (promptPanelRef.value?.clearIterateInput) {
+    await promptPanelRef.value.clearIterateInput()
+  }
+  // Call the original optimization function
+  await handleOptimizePrompt()
+}
 
 // 计算属性：根据优化模式选择对应的模板
 const currentSelectedTemplate = computed({
@@ -348,8 +365,17 @@ const openTemplateManager = (type: string) => {
   showTemplates.value = true
 }
 
+// 模板选择器引用
+const templateSelectRef = ref()
+
 const handleTemplateManagerClose = () => {
   showTemplates.value = false
+
+  // 刷新模板选择器以反映语言变更后的模板
+  // 子组件会通过 v-model 自动更新父组件的状态
+  if (templateSelectRef.value?.refresh) {
+    templateSelectRef.value.refresh()
+  }
 }
 
 // 数据管理器
