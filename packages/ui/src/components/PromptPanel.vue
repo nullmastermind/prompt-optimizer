@@ -75,6 +75,7 @@
         <div>
           <h4 class="theme-label mb-2">{{ t('prompt.iterateDirection') }}</h4>
           <textarea
+            ref="iterateTextareaRef"
             v-model="iterateInput"
             class="w-full theme-input resize-none"
             :placeholder="t('prompt.iteratePlaceholder')"
@@ -106,8 +107,9 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useToast } from '../composables/useToast'
+import { useStorage } from '../composables/useStorage'
 import TemplateSelect from './TemplateSelect.vue'
 import Modal from './Modal.vue'
 import OutputDisplay from './OutputDisplay.vue'
@@ -118,6 +120,7 @@ import type {
 
 const { t } = useI18n()
 const toast = useToast()
+const storage = useStorage()
 
 interface IteratePayload {
   originalPrompt: string;
@@ -174,6 +177,10 @@ const iterateInput = ref('')
 const templateType = ref<'optimize' | 'iterate'>('iterate')
 
 const outputDisplayRef = ref<InstanceType<typeof OutputDisplay> | null>(null);
+const iterateTextareaRef = ref<HTMLTextAreaElement | null>(null);
+
+// Storage key for persisting iterate input
+const ITERATE_INPUT_STORAGE_KEY = 'app:iterate-input'
 
 // 计算标题文本
 const templateTitleText = computed(() => {
@@ -205,34 +212,40 @@ const previousVersionText = computed(() => {
   }
 })
 
-const handleIterate = () => {
+const handleIterate = async () => {
   if (!props.selectedIterateTemplate) {
     toast.error(t('prompt.error.noTemplate'))
     return
   }
   showIterateInput.value = true
+
+  // Auto-select text when modal opens and there's existing content
+  await nextTick()
+  if (iterateTextareaRef.value && iterateInput.value.trim()) {
+    iterateTextareaRef.value.focus()
+    iterateTextareaRef.value.select()
+  }
 }
 
 const cancelIterate = () => {
   showIterateInput.value = false
-  iterateInput.value = ''
+  // Don't clear iterateInput.value - preserve the content
 }
 
-const submitIterate = () => {
+const submitIterate = async () => {
   if (!iterateInput.value.trim()) return
   if (!props.selectedIterateTemplate) {
     toast.error(t('prompt.error.noTemplate'))
     return
   }
-  
+
   emit('iterate', {
     originalPrompt: props.originalPrompt,
     optimizedPrompt: props.optimizedPrompt,
     iterateInput: iterateInput.value.trim()
   })
-  
-  // 重置输入
-  iterateInput.value = ''
+
+  // Don't clear input when "Confirm optimize" is pressed - preserve for future iterations
   showIterateInput.value = false
 }
 
@@ -256,6 +269,47 @@ const switchVersion = async (version: PromptRecord) => {
     version: version.version
   })
 }
+
+// Storage functions for iterate input persistence
+const saveIterateInput = async (value: string) => {
+  try {
+    await storage.setItem(ITERATE_INPUT_STORAGE_KEY, value)
+  } catch (error) {
+    console.error('Failed to save iterate input:', error)
+  }
+}
+
+const loadIterateInput = async () => {
+  try {
+    const savedInput = await storage.getItem(ITERATE_INPUT_STORAGE_KEY)
+    if (savedInput) {
+      iterateInput.value = savedInput
+    }
+  } catch (error) {
+    console.error('Failed to load iterate input:', error)
+  }
+}
+
+// Load saved iterate input on component mount
+onMounted(() => {
+  loadIterateInput()
+})
+
+// Watch iterate input changes and persist them
+watch(iterateInput, (newValue) => {
+  saveIterateInput(newValue)
+}, { immediate: false })
+
+// Function to clear iterate input when starting new optimization
+const clearIterateInput = async () => {
+  iterateInput.value = ''
+  await saveIterateInput('')
+}
+
+// Expose methods for parent component
+defineExpose({
+  clearIterateInput
+})
 
 // 监听流式状态变化，强制退出编辑状态
 watch([() => props.isOptimizing, () => props.isIterating], ([newOptimizing, newIterating], [oldOptimizing, oldIterating]) => {

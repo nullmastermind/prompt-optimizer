@@ -57,7 +57,7 @@
           :loading-text="$t('common.loading')"
           :loading="isOptimizing"
           :disabled="isOptimizing"
-          @submit="handleOptimizePrompt"
+          @submit="handleOptimizePromptWithClear"
           @add="handleAddPrompt"
           @configModel="showConfig = true"
         >
@@ -91,6 +91,7 @@
       <!-- 优化结果区域 -->
       <div class="flex-1 min-h-0">
         <PromptPanelUI
+          ref="promptPanelRef"
           v-model:optimized-prompt="optimizedPrompt"
           :reasoning="optimizedReasoning"
           :original-prompt="prompt"
@@ -197,6 +198,9 @@ import {
   type OptimizationMode
 } from '@prompt-optimizer/ui'
 
+// Ref to PromptPanel component
+const promptPanelRef = ref<InstanceType<typeof PromptPanelUI> | null>(null)
+
 // 初始化主题
 onMounted(() => {
   // 检查本地存储的主题偏好
@@ -278,6 +282,16 @@ const {
   selectedOptimizeModel,
   selectedTestModel
 )
+
+// Wrapper function to clear iterate input when starting new optimization
+const handleOptimizePromptWithClear = async () => {
+  // Clear iterate input when starting new optimization from scratch
+  if (promptPanelRef.value?.clearIterateInput) {
+    await promptPanelRef.value.clearIterateInput()
+  }
+  // Call the original optimization function
+  await handleOptimizePrompt()
+}
 
 // 计算属性：根据优化模式选择对应的模板
 const currentSelectedTemplate = computed({
