@@ -78,6 +78,7 @@
           </template>
           <template #template-select>
             <TemplateSelectUI
+              ref="templateSelectRef"
               v-model="currentSelectedTemplate"
               :type="selectedOptimizationMode === 'system' ? 'optimize' : 'userOptimize'"
               :optimization-mode="selectedOptimizationMode"
@@ -91,6 +92,7 @@
       <div class="flex-1 min-h-0">
         <PromptPanelUI
           v-model:optimized-prompt="optimizedPrompt"
+          :reasoning="optimizedReasoning"
           :original-prompt="prompt"
           :is-optimizing="isOptimizing"
           :is-iterating="isIterating"
@@ -254,6 +256,7 @@ const {
 const {
   prompt,
   optimizedPrompt,
+  optimizedReasoning,
   isOptimizing,
   isIterating,
   selectedOptimizeTemplate,
@@ -348,8 +351,17 @@ const openTemplateManager = (type: string) => {
   showTemplates.value = true
 }
 
+// 模板选择器引用
+const templateSelectRef = ref()
+
 const handleTemplateManagerClose = () => {
   showTemplates.value = false
+
+  // 刷新模板选择器以反映语言变更后的模板
+  // 子组件会通过 v-model 自动更新父组件的状态
+  if (templateSelectRef.value?.refresh) {
+    templateSelectRef.value.refresh()
+  }
 }
 
 // 数据管理器
